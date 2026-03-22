@@ -33,8 +33,8 @@ This application replaces that system entirely.
 
 | Label | Age Range | Notes |
 |-------|-----------|-------|
-| **Child 1** | Preschool | Will get access later |
-| **Child 2** | Elementary | Adventurous eater, will try most things |
+| **Child 1** | Preschool | Dependent profile (no login) — considered in meal generation. Will get app access later. |
+| **Child 2** | Elementary | Dependent profile (no login) — adventurous eater, will try most things. Will get app access later. |
 
 ### User Context
 
@@ -68,6 +68,10 @@ This application replaces that system entirely.
 | FR-2.3 | Profile includes family member info (children with ages, preferences) | Should |
 | FR-2.4 | Existing profiles (Adult 1, Adult 2) are pre-seeded from `.local/` seed data | Must |
 | FR-2.5 | Profile changes take effect on next meal plan generation | Must |
+| FR-2.6 | Dependent profiles: children have full dietary profiles stored in Users table with `role: dependent` (no Cognito login) | Must |
+| FR-2.7 | Head-of-household users can create, edit, and delete dependent profiles | Must |
+| FR-2.8 | Dependent profiles (Child 1, Child 2) are pre-seeded from `.local/` seed data | Must |
+| FR-2.9 | Meal plan generation considers ALL family member profiles (adults + dependents) | Must |
 
 ### FR-3: Meal Planning
 
@@ -111,6 +115,10 @@ This application replaces that system entirely.
 | FR-5.9 | Optimistic concurrency to prevent lost updates | Must |
 | FR-5.10 | Progress bar (completed / total items) | Should |
 | FR-5.11 | Filter by: unchecked only, section, meal association | Should |
+| FR-5.12 | Grocery list auto-updates when meal plan is modified (meal swap/add/remove triggers recalculation of affected items) | Must |
+| FR-5.13 | Pantry/in-stock tracking: items the family already has on hand are flagged and excluded from "to buy" count | Should |
+| FR-5.14 | Persistent pantry staples list (e.g., salt, pepper, oil) — auto-applied when generating grocery lists | Should |
+| FR-5.15 | Users can toggle `inStock` per-item on the grocery list | Should |
 
 ### FR-6: AI Chatbot
 
@@ -222,18 +230,26 @@ This application replaces that system entirely.
 - **US-13**: As Adult 2, I can check off items at the store on my phone and Adult 1 sees the updates within 5 seconds.
 - **US-14**: As a user, I can see which meals an ingredient is for so that I know if I can skip it.
 - **US-15**: As a user, I can add a manual item like "paper towels" to the grocery list.
+- **US-16**: As Adult 2, when I swap Thursday's dinner in the meal plan, the grocery list automatically updates — removing ingredients I no longer need and adding new ones.
+- **US-17**: As a user, I can mark items as "in stock" so they don't show up in my shopping count.
+- **US-18**: As Adult 2, I can maintain a pantry staples list (salt, pepper, olive oil, etc.) so those items are always flagged as in-stock on new grocery lists.
+
+### Epic: Family Profiles
+
+- **US-19**: As a head-of-household, I can create a dependent profile for each child so their preferences are considered during meal planning.
+- **US-20**: As Adult 2, I can edit Child 1's profile to update their food preferences as they grow.
 
 ### Epic: Notifications
 
-- **US-16**: As Adult 2, I receive an email when the weekly meal plan is generated so I can review it.
-- **US-17**: As Adult 1, I receive security alerts when autonomous processes run so I can monitor the system.
+- **US-21**: As Adult 2, I receive an email when the weekly meal plan is generated so I can review it.
+- **US-22**: As Adult 1, I receive security alerts when autonomous processes run so I can monitor the system.
 
 ---
 
 ## Constraints
 
 - **Budget**: ~$5–15/month AWS spend (non-negotiable)
-- **Users**: 2 active users initially; 2 children to be added later
+- **Users**: 2 active users initially; 2 children as dependent profiles (no login); children to get app access later
 - **Technology**: ASP.NET Core (.NET 9) backend, React 19 frontend, AWS CDK — chosen for professional development growth
 - **Timeline**: Phased delivery — see [MILESTONES.md](MILESTONES.md)
 

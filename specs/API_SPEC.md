@@ -90,9 +90,58 @@ Update the current user's profile. Partial updates supported (merge semantics).
 
 #### `GET /api/family/members`
 
-List all family member profiles. Requires `head_of_household` role.
+List all family member profiles (adults + dependents). Requires `head_of_household` role.
 
 **Response** `200 OK` — Array of profile objects.
+
+#### `GET /api/family/dependents`
+
+List dependent profiles only. Requires `head_of_household` role.
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "userId": "dep_abc123",
+    "name": "Child 1",
+    "familyId": "string",
+    "role": "dependent",
+    "ageGroup": "preschool",
+    "dietaryPrefs": [],
+    "allergies": [],
+    "eatingStyle": "picky eater, prefers mild flavors",
+    "preferredFoods": ["pasta", "rice", "cheese"],
+    "avoidedFoods": ["spicy food", "mixed textures"],
+    "macroTargets": { "calories": 1200 },
+    "notes": "Prefers simple, familiar foods",
+    "createdAt": "2026-01-20T00:00:00Z",
+    "updatedAt": "2026-01-20T00:00:00Z"
+  }
+]
+```
+
+#### `POST /api/family/dependents`
+
+Create a new dependent profile. Requires `head_of_household` role.
+
+**Request Body**: Dependent profile object (omit userId, createdAt).
+
+**Response** `201 Created` — Full dependent profile with generated userId (`dep_{shortId}`).
+
+#### `PUT /api/family/dependents/{userId}`
+
+Update a dependent profile. Requires `head_of_household` role.
+
+**Request Body**: Partial dependent profile object (merge semantics).
+
+**Response** `200 OK` — Updated dependent profile.
+
+#### `DELETE /api/family/dependents/{userId}`
+
+Delete a dependent profile. Requires `head_of_household` role.
+
+**Response** `204 No Content`
 
 ---
 
@@ -180,6 +229,8 @@ Create a new meal plan (manual).
 #### `PUT /api/meal-plans/{weekStartDate}`
 
 Update an existing meal plan. Supports partial meal updates.
+
+> **Grocery List Cascade**: When meals are added, removed, or swapped, the service automatically recalculates the grocery list. Items exclusively associated with removed meals are deleted; new items are added from replacement recipes; shared ingredient quantities are adjusted. Manually-added items and checked-off states are preserved. The grocery list `version` is incremented to trigger polling updates for all connected clients.
 
 **Response** `200 OK` — Updated plan.
 
@@ -451,7 +502,8 @@ Get the active grocery list for the current family.
       ],
       "checkedOff": false,
       "checkedOffBy": null,
-      "checkedOffTimestamp": null
+      "checkedOffTimestamp": null,
+      "inStock": false
     }
   ],
   "version": 42,
@@ -543,6 +595,83 @@ Polling endpoint for real-time sync. Returns only changes since the given ISO 86
 ```
 
 **Response** `304 Not Modified` — No changes since timestamp.
+
+#### `PUT /api/grocery-lists/items/{itemId}/in-stock`
+
+Toggle the in-stock status for an item.
+
+**Request Body**:
+
+```json
+{
+  "inStock": true,
+  "version": 42
+}
+```
+
+**Response** `200 OK` — Updated item + new version number.
+
+---
+
+### Pantry Staples
+
+#### `GET /api/pantry/staples`
+
+Get the family's persistent pantry staples list.
+
+**Response** `200 OK`
+
+```json
+{
+  "familyId": "string",
+  "items": [
+    { "name": "salt", "section": "spices" },
+    { "name": "black pepper", "section": "spices" },
+    { "name": "olive oil", "section": "pantry" },
+    { "name": "garlic", "section": "produce" }
+  ],
+  "updatedAt": "2026-03-22T00:00:00Z"
+}
+```
+
+#### `PUT /api/pantry/staples`
+
+Replace the full pantry staples list.
+
+**Request Body**:
+
+```json
+{
+  "items": [
+    { "name": "salt", "section": "spices" },
+    { "name": "black pepper", "section": "spices" },
+    { "name": "olive oil", "section": "pantry" }
+  ]
+}
+```
+
+**Response** `200 OK` — Updated staples list.
+
+#### `POST /api/pantry/staples/items`
+
+Add a single item to pantry staples.
+
+**Request Body**:
+
+```json
+{
+  "name": "cumin",
+  "section": "spices"
+}
+```
+
+**Response** `201 Created` — Updated staples list.
+
+#### `DELETE /api/pantry/staples/items/{name}`
+
+Remove an item from pantry staples.
+
+**Response** `204 No Content`
 
 ---
 

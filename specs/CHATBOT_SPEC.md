@@ -64,10 +64,11 @@ The system prompt is re-built on each conversation turn with current family cont
 You are a friendly and helpful meal planning assistant for the {familyName} family.
 
 ## Family Members
-{-- Built dynamically from user profiles in DynamoDB --}
-{-- Example format for each member: --}
+{-- Built dynamically from user profiles in DynamoDB (adults + dependents) --}
+{-- Example format for each adult member: --}
 - {name}: {dietaryPrefs}. Excludes {excludedIngredients}. Prefers {cuisinePreferences}. Target: {calories} kcal, {protein}g protein. {cookingConstraints}.
-- {childName} (age {age}): {preferences}.
+{-- Example format for each dependent (child): --}
+- {childName} (age {age}): {eatingStyle}. Likes: {preferredFoods}. Avoids: {avoidedFoods}.
 
 ## Shopping
 {-- Built dynamically from store preferences config --}
@@ -124,7 +125,7 @@ Generates a weekly meal plan respecting all dietary constraints.
 }
 ```
 
-**Execution**: Calls `MealPlanService.GenerateAsync()` → invokes ConstraintEngine → validates → stores plan → triggers grocery list generation.
+**Execution**: Calls `MealPlanService.GenerateAsync()` → invokes ConstraintEngine (checks ALL family profiles including dependents) → validates → stores plan → triggers grocery list generation (with pantry staple matching).
 
 ### 2. modify_meal_plan
 
@@ -146,6 +147,8 @@ Swaps individual meals within an existing plan.
   }
 }
 ```
+
+**Execution**: Calls `MealPlanService.SwapMealAsync()` → validates constraints → updates plan → **cascades to grocery list** (removes ingredients for old meal, adds ingredients for new meal, adjusts shared quantities, preserves manually-added items and check-off states). The AI should inform the user about grocery list changes (e.g., "I've swapped Thursday's dinner and updated your grocery list — removed broccoli, added green beans").
 
 ### 3. search_recipes
 
@@ -277,6 +280,36 @@ Calculates nutrition for a recipe or meal combination.
   }
 }
 ```
+
+### 8. manage_pantry
+
+Manages the family's pantry staples list.
+
+```json
+{
+  "name": "manage_pantry",
+  "description": "Add or remove items from the family's pantry staples list. Items in the pantry are auto-marked as 'in stock' on grocery lists.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": { "type": "string", "enum": ["add_items", "remove_items", "list"] },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "section": { "type": "string" }
+          }
+        }
+      }
+    },
+    "required": ["action"]
+  }
+}
+```
+
+**Execution**: Calls `PantryService` → updates `PANTRY#STAPLES` record → if items were added/removed, rechecks active grocery list to update `inStock` flags.
 
 ---
 

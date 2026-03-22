@@ -4,6 +4,8 @@
 
 Authentication uses Amazon Cognito User Pool with TOTP-based two-factor authentication. There are only 2 users (Adult 1 and Adult 2), so the design is intentionally simple — no self-service registration, no federated identity providers, no ASP.NET Identity.
 
+> **Dependent Profiles**: Children (Child 1, Child 2) have dietary profiles in the Users table with `role: "dependent"` but do NOT have Cognito accounts. They cannot log in. Their profiles exist solely for meal plan constraint evaluation. In a future enhancement, children may be granted their own Cognito accounts with a `member` role to view meal plans and help with grocery lists.
+
 ---
 
 ## Cognito User Pool Configuration

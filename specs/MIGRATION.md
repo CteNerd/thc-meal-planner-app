@@ -18,6 +18,8 @@ The data below was extracted from the following files in the legacy `thc-meal-pr
 |---------------------|--------|--------|
 | `.local/profiles/adult-1.md` | Users table | Stored locally — **verify with user** |
 | `.local/profiles/adult-2.md` | Users table | Stored locally — **verify with user** |
+| `.local/profiles/child-1.md` | Users table (dependent) | Stored locally — **verify with user** |
+| `.local/profiles/child-2.md` | Users table (dependent) | Stored locally — **verify with user** |
 | `recipes/*.md` (6 files) | Recipes table | Embedded below — **verify with user** |
 | `constraints/enhanced_constraints.yaml` | C# ConstraintEngine config | Embedded below |
 | `constraints/store-preferences.md` | App constants | Embedded below |
@@ -195,6 +197,58 @@ dotnet run --project src/ThcMealPlanner.Migration -- \
 
 > **Note**: `cognitoSub` values are assigned during user provisioning in Cognito. Migration script takes a mapping file or prompts for the Cognito sub IDs.
 
+### Child 1 — Dependent (DRAFT — verify before committing)
+
+> Profile data is stored in `.local/profiles/child-1.md`. Dependents have no Cognito account — their PK uses a generated ID.
+
+```json
+{
+  "PK": "USER#dep_child1",
+  "SK": "PROFILE",
+  "name": "<from .local/profiles/child-1.md>",
+  "familyId": "FAM#<family-id>",
+  "role": "dependent",
+  "ageGroup": "<from local profile>",
+  "dietaryPrefs": [],
+  "allergies": [],
+  "eatingStyle": "<from local profile>",
+  "preferredFoods": ["<from local profile>"],
+  "avoidedFoods": ["<from local profile>"],
+  "macroTargets": {
+    "calories": "<age-appropriate from local profile>"
+  },
+  "notes": "<from local profile>",
+  "createdAt": "2026-01-20T00:00:00Z",
+  "updatedAt": "2026-01-20T00:00:00Z"
+}
+```
+
+### Child 2 — Dependent (DRAFT — verify before committing)
+
+> Profile data is stored in `.local/profiles/child-2.md`. Dependents have no Cognito account — their PK uses a generated ID.
+
+```json
+{
+  "PK": "USER#dep_child2",
+  "SK": "PROFILE",
+  "name": "<from .local/profiles/child-2.md>",
+  "familyId": "FAM#<family-id>",
+  "role": "dependent",
+  "ageGroup": "<from local profile>",
+  "dietaryPrefs": [],
+  "allergies": [],
+  "eatingStyle": "<from local profile>",
+  "preferredFoods": ["<from local profile>"],
+  "avoidedFoods": ["<from local profile>"],
+  "macroTargets": {
+    "calories": "<age-appropriate from local profile>"
+  },
+  "notes": "<from local profile>",
+  "createdAt": "2026-01-20T00:00:00Z",
+  "updatedAt": "2026-01-20T00:00:00Z"
+}
+```
+
 ---
 
 ## Recipe Migration
@@ -331,14 +385,15 @@ After migration, the script runs validation checks:
 
 | Check | Expected |
 |-------|----------|
-| Users table count | 2 records |
+| Users table count | 4 records (2 adults + 2 dependents) |
 | Recipes table count | 6 records |
 | All recipes have `cuisine` field | Yes |
 | All recipes have `proteinSource` field | Yes |
 | All recipes have `cookingMethod` field | Yes |
 | Adult 1 has NO severe allergies | Verify `allergies` is empty |
 | Adult 2 has severe food allergy | Verify severity = "severe" |
-| Family members ages correct | Verify from `.local/profiles/adult-2.md` |
+| Family members ages correct | Verify from `.local/profiles/child-1.md` and `child-2.md` |
+| Dependent profiles have role = "dependent" | Verify both child records |
 | Constraint config loads without error | Yes |
 
 ---

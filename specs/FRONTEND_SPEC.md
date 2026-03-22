@@ -89,12 +89,17 @@ Single-page application built with React 19, TypeScript, Vite, and TailwindCSS. 
 
 ### 5. Grocery List (`/grocery-list`)
 - Grouped by store section (Produce, Dairy, Protein, etc.)
-- Each item: checkbox + name + quantity + unit + linked recipe
+- Each item: checkbox + name + quantity + unit + linked recipe + in-stock badge
+- Items flagged as `inStock` show a "✓ In Stock" badge and are visually muted (not in "to buy" count)
+- Users can toggle in-stock per-item (long-press or swipe action)
 - Real-time sync via polling (5s interval when tab visible)
 - Swipe to remove on mobile
 - "Add Item" floating action button
 - Completed items collapse to bottom with gray styling
 - Version indicator for conflict detection
+- **Pantry Staples** section: manage persistent pantry staples list (settings gear icon); items on this list are auto-marked in-stock when grocery lists are generated
+- Progress bar shows "to buy" count (excludes in-stock and completed items)
+- Filter options: unchecked only, section, meal association, in-stock/needs-buying
 - Responsive: full-width on mobile for easy tapping at the store
 
 ### 6. Chat (`/chat`)
@@ -107,9 +112,10 @@ Single-page application built with React 19, TypeScript, Vite, and TailwindCSS. 
 - Responsive: full-screen on mobile
 
 ### 7. Profile (`/profile`)
-- Tabbed view: Personal Info, Dietary Preferences, Notifications
+- Tabbed view: Personal Info, Dietary Preferences, Family Members, Notifications
 - **Personal**: name, email (read-only from Cognito)
 - **Dietary**: allergies (severity selector), excluded ingredients (tag input), cuisine preferences (multi-select), macro targets (sliders), cooking constraints
+- **Family Members**: list of dependent profiles (children); add/edit/remove dependents; each dependent shows: name, age, eating style, preferred/avoided foods, notes
 - **Notifications**: toggle switches for email preferences
 - Save button with optimistic UI update
 - Responsive: single column on mobile, two-column on desktop
@@ -157,7 +163,13 @@ src/
 │   │   ├── GroceryList.tsx
 │   │   ├── SectionGroup.tsx
 │   │   ├── GroceryItem.tsx
-│   │   └── AddItemFab.tsx
+│   │   ├── AddItemFab.tsx
+│   │   ├── InStockBadge.tsx
+│   │   └── PantryStaplesModal.tsx
+│   ├── profile/
+│   │   ├── DependentList.tsx
+│   │   ├── DependentForm.tsx
+│   │   └── DependentCard.tsx
 │   └── chat/
 │       ├── ChatWindow.tsx
 │       ├── MessageBubble.tsx
@@ -169,7 +181,9 @@ src/
 │   ├── useApi.ts                # Fetch wrapper with auth headers
 │   ├── usePolling.ts            # Activity-based polling with Page Visibility
 │   ├── useGroceryList.ts        # Grocery list state + optimistic concurrency
+│   ├── usePantry.ts             # Pantry staples CRUD
 │   ├── useMealPlan.ts           # Current plan data
+│   ├── useDependents.ts         # Family dependent profiles CRUD
 │   ├── useRecipes.ts            # Cookbook data
 │   └── useChat.ts               # Chat state management
 ├── contexts/

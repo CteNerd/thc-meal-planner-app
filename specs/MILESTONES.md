@@ -72,15 +72,17 @@
 | 2.1 | Deploy DataStack | All 6 DynamoDB tables with GSIs and TTL config |
 | 2.2 | Build DynamoDB data access layer | Generic repository pattern, typed document operations |
 | 2.3 | Profile API endpoints | GET/PUT `/api/profile` with FluentValidation |
-| 2.4 | Profile UI | Profile page with dietary prefs, allergies, macro targets, cooking constraints |
-| 2.5 | Run migration script | Migrate Adult 1 + Adult 2 profiles from `.local/seed-data/` |
-| 2.6 | Family-scoped authorization | Service layer enforces familyId on all queries |
-| 2.7 | SecretsStack deployment | OpenAI API key in Secrets Manager |
+| 2.4 | Dependent profile endpoints | CRUD `/api/family/dependents` for managing child profiles |
+| 2.5 | Profile UI | Profile page with dietary prefs, allergies, macro targets, cooking constraints, family member management |
+| 2.6 | Run migration script | Migrate Adult 1 + Adult 2 profiles + Child 1 + Child 2 dependent profiles from `.local/seed-data/` |
+| 2.7 | Family-scoped authorization | Service layer enforces familyId on all queries |
+| 2.8 | SecretsStack deployment | OpenAI API key in Secrets Manager |
 
 ### Milestone Criteria
 - Both user profiles load correctly after login
+- Dependent profiles (Child 1, Child 2) visible in family management UI
 - Profile edits persist to DynamoDB
-- Migration script validates all data correctly
+- Migration script validates all data correctly (4 profiles total)
 - Adult 1 has no severe allergies; Adult 2 has severe food allergy (anaphylaxis-level)
 
 ---
@@ -149,12 +151,18 @@
 | 5.5 | Add/remove items manually | FAB button for manual adds, swipe-to-remove |
 | 5.6 | Completed item TTL | 7-day cleanup for checked items (application-level) |
 | 5.7 | Store preferences integration | Primary store section ordering for shopping flow |
+| 5.8 | Grocery list reactivity | Auto-recalculate grocery list when meal plan is modified (swap/add/remove meals) |
+| 5.9 | Pantry staples management | CRUD for persistent pantry staples list; auto-mark matching items as in-stock |
+| 5.10 | In-stock toggle | Per-item in-stock flag on grocery list; in-stock items excluded from "to buy" count |
 
 ### Milestone Criteria
 - Grocery list generates from active meal plan
 - Both users see real-time updates when checking items
 - Conflict resolution works (two users check same item simultaneously)
 - Completed items auto-clean after 7 days
+- Swapping a meal updates the grocery list (old ingredients removed, new ones added)
+- Pantry staples auto-flagged as in-stock on new grocery lists
+- In-stock items visually distinguished and excluded from shopping count
 
 ---
 
@@ -167,7 +175,7 @@
 | # | Task | Details |
 |---|------|---------|
 | 6.1 | Chat API endpoint | POST message, streaming response |
-| 6.2 | OpenAI function calling | 7 function definitions wired to service layer |
+| 6.2 | OpenAI function calling | 8 function definitions wired to service layer (includes pantry management) |
 | 6.3 | System prompt builder | Dynamic context injection (family, current plan, grocery state) |
 | 6.4 | Chat UI | Bubble interface, markdown rendering, typing indicator |
 | 6.5 | Confirmation flow | Destructive action confirmation cards |

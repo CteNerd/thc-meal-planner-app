@@ -224,7 +224,7 @@ public class RecipeSafetyValidator
 | Tags | Multi-select | vegetarian, gluten-free, kid-friendly, etc. |
 | Max Time | Slider | 0–180 minutes |
 | Favorites Only | Toggle | Show only favorited recipes |
-| Safe For | Dropdown | Adult 1, Adult 2, Everyone |
+| Safe For | Dropdown | Adult 1, Adult 2, Child 1, Child 2, Everyone |
 
 ### Sort Options
 - Name (A–Z)

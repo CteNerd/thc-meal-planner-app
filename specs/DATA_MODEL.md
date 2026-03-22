@@ -21,7 +21,7 @@ Stores user profiles with full dietary information migrated from markdown profil
 | name | String | Display name |
 | email | String | Email address |
 | familyId | String | Shared family identifier (e.g., `FAM#<family-id>`) |
-| role | String | `head_of_household` or `member` |
+| role | String | `head_of_household`, `member`, or `dependent` |
 | dietaryPrefs | List\<String\> | e.g., `["vegetarian"]` |
 | allergies | List\<Map\> | `[{allergen, severity, reaction, crossContamination}]` |
 | excludedIngredients | List\<String\> | e.g., `["mushrooms", "peanuts"]` |
@@ -30,7 +30,7 @@ Stores user profiles with full dietary information migrated from markdown profil
 | cookingConstraints | Map | `{maxWeekdayPrepMinutes, maxWeekendPrepMinutes, prefersBatchCooking, batchCookDay}` |
 | flavorPreferences | Map | `{spiceLevel, prefersSavory, favoriteHerbs[]}` |
 | defaultServings | Number | Default serving size |
-| familyMembers | List\<Map\> | `[{name, age, preferences}]` |
+| familyMembers | List\<Map\> | `[{name, age, preferences}]` (denormalized summary — each child also has a full `dependent` profile record) |
 | doctorNotes | List\<String\> | Medical dietary notes |
 | notificationPrefs | Map | `{mealPlanEmail, weeklyDigest, securityAlerts}` |
 | createdAt | String | ISO 8601 |
@@ -38,12 +38,17 @@ Stores user profiles with full dietary information migrated from markdown profil
 
 **TTL**: None (permanent).
 
+**Dependent Profiles**: Children (and future family members without login) are stored as Users table records with `role: "dependent"`. Their PK uses a generated ID (`USER#dep_{shortId}`) since they have no Cognito sub. The parent's `familyMembers` array is kept as a denormalized summary for quick access; the full dependent profile is the source of truth.
+
+> **Future Enhancement**: When children gain their own app access, their records are promoted from `dependent` to `member` and linked to a Cognito account.
+
 **Access Patterns**:
 
 | Pattern | Key Condition |
-|---------|--------------|
+|---------|---------------|
 | Get user profile | PK = `USER#{sub}`, SK = `PROFILE` |
 | List family members | GSI `FamilyIndex`: PK = `FAM#{familyId}` |
+| List dependents only | GSI `FamilyIndex`: PK = `FAM#{familyId}`, filter `role = "dependent"` |
 
 **GSI: FamilyIndex**:
 - PK: `familyId`
@@ -232,9 +237,12 @@ Living document grocery list with per-item completion tracking and optimistic co
   "checkedOffBy": null,
   "checkedOffByName": null,
   "checkedOffTimestamp": null,
-  "completedTTL": null
+  "completedTTL": null,
+  "inStock": false
 }
 ```
+
+**Pantry / In-Stock Tracking**: Items with `inStock: true` are ingredients the family already has on hand (e.g., salt, pepper, olive oil). When generating a grocery list from a meal plan, the service checks the family's pantry staples and marks matching items as `inStock`. Users can also toggle `inStock` per-item. In-stock items remain on the list (for reference) but are visually distinguished and excluded from the "to buy" count.
 
 **Item TTL Strategy**: When an item is checked off, `completedTTL` is set to current time + 7 days (Unix epoch). A scheduled cleanup process (or application-level filtering) uses this to remove stale completed items. DynamoDB TTL attribute is set on a projected copy if per-item expiry is needed, or application logic filters them.
 
@@ -248,6 +256,35 @@ Living document grocery list with per-item completion tracking and optimistic co
 |---------|--------------|
 | Get active list | PK = `FAMILY#{fam}`, SK = `LIST#ACTIVE` |
 | Poll for changes | PK = `FAMILY#{fam}`, SK = `LIST#ACTIVE`, filter `updatedAt > :since` |
+| Get pantry staples | PK = `FAMILY#{fam}`, SK = `PANTRY#STAPLES` |
+
+**Pantry Staples Record**:
+
+A separate item stores the family's persistent pantry staples — ingredients they always keep in stock:
+
+```json
+{
+  "PK": "FAMILY#{familyId}",
+  "SK": "PANTRY#STAPLES",
+  "items": [
+    { "name": "salt", "section": "spices" },
+    { "name": "black pepper", "section": "spices" },
+    { "name": "olive oil", "section": "pantry" },
+    { "name": "garlic", "section": "produce" }
+  ],
+  "updatedAt": "2026-03-22T00:00:00Z"
+}
+```
+
+During grocery list generation, ingredients matching pantry staples are auto-marked `inStock: true`.
+
+**Grocery List Reactivity**: When a meal plan is modified (meal swapped, added, or removed), the grocery list must be recalculated. The `mealAssociations` on each item link ingredients to specific meals. On meal change, the service:
+1. Removes items exclusively associated with the removed/replaced meal
+2. Adds new items from the replacement recipe
+3. Adjusts quantities for shared ingredients
+4. Preserves manually-added items and checked-off states
+5. Re-applies pantry staple matching (`inStock` flags)
+6. Increments the list `version` to trigger polling updates
 
 ---
 
@@ -323,6 +360,26 @@ Used for grocery list grouping. Migrated from `constraints/store-preferences.md`
 - Family members: Child 1 (preschool, picky eater), Child 2 (elementary, adventurous)
 - Doctor notes: medical dietary management, allergen avoidance, supplementation
 
+**Child 1** (dependent — mapped from `.local/profiles/child-1.md`):
+- Role: `dependent`
+- Age group: preschool
+- Dietary prefs: `[]` (no restrictions)
+- Allergies: `[]` (none — inherits family-level allergen avoidance)
+- Eating style: picky eater, prefers mild flavors
+- Preferred foods: from local profile
+- Macro targets: age-appropriate (from local profile)
+- Notes: all meals must account for this family member's preferences when generating plans
+
+**Child 2** (dependent — mapped from `.local/profiles/child-2.md`):
+- Role: `dependent`
+- Age group: elementary
+- Dietary prefs: `[]` (no restrictions)
+- Allergies: `[]` (none — inherits family-level allergen avoidance)
+- Eating style: adventurous, loves vegetables
+- Preferred foods: from local profile
+- Macro targets: age-appropriate (from local profile)
+- Notes: willing to try most things; helps drive recipe variety
+
 ### Recipes (6 from existing repo)
 
 | Recipe | Category | Cuisine | Protein | Key Tags |
@@ -338,11 +395,11 @@ Used for grocery list grouping. Migrated from `constraints/store-preferences.md`
 
 ## Capacity Planning
 
-For a 2-person household:
+For a 2-adult household with 2 dependents:
 
 | Table | Estimated Items | Reads/Month | Writes/Month |
 |-------|----------------|-------------|--------------|
-| Users | 2-4 | ~500 | ~20 |
+| Users | 4 (2 adults + 2 dependents) | ~500 | ~20 |
 | MealPlans | ~50 (4/month × 12 + archived) | ~2,000 | ~50 |
 | Recipes | 50-200 over time | ~5,000 | ~100 |
 | Favorites | 20-50 | ~1,000 | ~50 |

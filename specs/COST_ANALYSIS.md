@@ -197,7 +197,7 @@ new budgets.CfnBudget(this, 'MonthlyBudget', {
       thresholdType: 'PERCENTAGE',
     },
     subscribers: [{
-      address: 'roddy@example.com',
+      address: 'adult1@example.com',
       subscriptionType: 'EMAIL',
     }],
   }],
