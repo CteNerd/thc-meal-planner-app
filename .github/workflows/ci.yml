@@ -94,6 +94,9 @@ jobs:
         working-directory: ./infra
         run: npm ci
 
-      - name: CDK diff (dev)
+      - name: CDK synth (dev)
         working-directory: ./infra
-        run: npx cdk diff --context env=dev
+        env:
+          CDK_DEFAULT_ACCOUNT: '425061472162'
+          CDK_DEFAULT_REGION: 'us-east-1'
+        run: npx cdk synth --context env=dev
