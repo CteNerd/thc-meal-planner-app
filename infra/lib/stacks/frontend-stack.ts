@@ -9,9 +9,7 @@ export class FrontendStack extends Stack {
   public constructor(scope: Construct, id: string, props: FrontendStackProps) {
     super(scope, id, props);
 
-    const prefix = `thc-meal-planner-${props.deploymentConfig.name}`;
     const frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
-      bucketName: `${prefix}-frontend`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true
     });
