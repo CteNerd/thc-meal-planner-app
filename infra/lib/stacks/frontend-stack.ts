@@ -1,4 +1,4 @@
-import { CfnOutput, Duration, Stack } from 'aws-cdk-lib';
+import { CfnOutput, Duration, Fn, Stack } from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -16,6 +16,10 @@ export class FrontendStack extends Stack {
       enforceSSL: true
     });
 
+    const apiUrlParts = Fn.split('/', props.api.apiUrl);
+    const apiDomainName = Fn.select(2, apiUrlParts);
+    const apiStagePath = Fn.join('', ['/', Fn.select(3, apiUrlParts)]);
+
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
@@ -26,7 +30,9 @@ export class FrontendStack extends Stack {
       },
       additionalBehaviors: {
         'api/*': {
-          origin: new origins.HttpOrigin(props.api.apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')),
+          origin: new origins.HttpOrigin(apiDomainName, {
+            originPath: apiStagePath
+          }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
