@@ -9,10 +9,10 @@ Living tracker for foundation work: scaffolding, CI/CD, infra baseline, and auth
 | 1.1 | Initialize monorepo structure (`frontend`, `backend`, `infra`) | Done | Directories present in repository |
 | 1.2 | Scaffold ASP.NET Core 9 API | Done | `backend/ThcMealPlanner.sln`, API project, `/api/health`, Lambda + AOT config |
 | 1.3 | Scaffold React 19 + Vite + TailwindCSS | Done | `frontend/package.json`, Vite config, router shell, Tailwind styles, starter test |
-| 1.4 | Create CDK project with 6 stacks | Done | `infra/package.json`, `bin/app.ts`, config files, shared constructs, 6 stack skeletons |
-| 1.5 | Deploy AuthStack | Not Started | Pending AWS auth/infrastructure setup |
+| 1.4 | Create CDK project with 6 stacks | Done | `infra/package.json`, `infra/bin/app.ts`, config files, shared constructs, 6 stack skeletons — `cdk synth` produces all 6 CF templates cleanly |
+| 1.5 | Deploy AuthStack | Not Started | Pending IAM user/role setup (currently root credentials) |
 | 1.6 | Implement login flow with TOTP | In Progress | Backend JWT/auth + protected session route, auth tests (unauthorized/authenticated), frontend auth context/service, TOTP flow, protected routes, API auth header + 401 refresh handling |
-| 1.7 | Add CI build/test/lint pipeline | In Progress | `.github/workflows/ci.yml` added for backend/frontend/infra jobs; runtime execution blocked in current environment |
+| 1.7 | Add CI build/test/lint pipeline | Done | `.github/workflows/ci.yml` validated locally — all 3 jobs produce clean results; CI ready to run in GitHub Actions |
 | 1.8 | Deploy to dev | Not Started | Pending stack implementation and CI/CD |
 
 ## Notes
@@ -27,35 +27,37 @@ Track items that require capabilities outside the current Codespaces session:
 | Item | Why Blocked Here | Remediation Later |
 |---|---|---|
 | 0.9 | GitHub issue pickup and workflow execution require repository-side automation and validation outside this session | Run tagged test issues and workflow checks from a fully authorized environment |
-| 1.5 | Cognito provisioning requires AWS credentials, account context, and verified deployment environment | Deploy `AuthStack` with AWS access and confirm pool/client outputs |
+| 1.5 | Cognito provisioning requires AWS credentials via a non-root IAM user/role; currently authenticated as root | Create a CDK deploy IAM user with AdministratorAccess, configure named profile, then deploy `AuthStack` and confirm pool/client outputs |
 | 1.6 | End-to-end Cognito SRP + TOTP verification requires deployed User Pool, app client, and real token issuance | Replace placeholder frontend auth service with live Cognito integration and verify protected API calls |
-| 1.7 | CI workflow execution and local build/test commands are blocked in this session by repository file-provider limitations (`ENOPRO`) and unavailable Actions runtime | Re-run backend/frontend/infra builds and workflow jobs from a fully functional local or GitHub-hosted environment |
-| 1.8 | CDK deploy, S3 sync, and CloudFront invalidation require AWS credentials and runtime outputs | Deploy from a trusted local or cloud-enabled environment |
+| 1.8 | CDK deploy, S3 sync, and CloudFront invalidation require AWS credentials and runtime outputs | Deploy from a trusted local or cloud-enabled environment after 1.5 is complete |
 
-## Session Checkpoint (2026-03-22)
+## Session Checkpoint (2026-03-22, Laptop)
 
-Completed in this session:
+Resolved all Codespaces-blocked backlog items:
 
-- Phase 1.2 backend scaffold, including Lambda-ready API project and `/api/health` endpoint.
-- Phase 1.3 frontend scaffold, including routing, Tailwind, auth placeholders, and initial tests.
-- Phase 1.4 CDK scaffold, including stack skeletons, constructs, and env config.
-- Phase 1.6 hardening pass:
-	- Backend JWT/Cognito auth pipeline scaffolded.
-	- Protected `/api/session` endpoint added.
-	- Test auth handler and auth-focused endpoint tests added.
-	- Frontend auth context/service expanded for session and refresh semantics.
-	- API client now injects bearer token and handles 401 refresh/retry path.
-- Phase 1.7 scaffold started with `.github/workflows/ci.yml`.
+- Installed `aws-cdk` CLI (v2.1112.0) globally via npm; was the only missing tool.
+- AWS CLI v2.28.16, GitHub CLI v2.78.0, dotnet 9.0.305, Node 24.6 all present and authenticated.
+- Created missing `infra/bin/app.ts` CDK entry point (Codespaces had not committed it).
+- All 6 CDK stacks synthesize cleanly (`cdk synth --context env=dev` produces CloudFormation templates).
+- Backend: 3/3 tests passing (added `GlobalUsings.cs` to fix missing Xunit/DI using directives).
+- Frontend: 2/2 tests passing; fixed lint error (`vite-env.d.ts` not in tsconfig), fixed `vite.config.ts` to import `defineConfig` from `vitest/config`, fixed test to use `findByRole` for async auth state.
+- CI workflow updated: `infra` job now publishes Lambda binary before `cdk diff`.
+- Generated `frontend/package-lock.json` and `infra/package-lock.json` (ready to commit).
 
-Still blocked in this environment:
+**Next steps:**
 
-- Running terminal commands and VS Code tasks (`ENOPRO`), so build/test execution could not be validated here.
-- GitHub Actions execution and AWS deployment actions.
+1. Commit all changes and push to trigger CI workflow in GitHub Actions.
+2. Create a CDK deploy IAM user (not root) — see root user guidance below.
+3. Deploy `AuthStack` to get Cognito User Pool and app client IDs.
+4. Replace placeholder frontend auth service with live Cognito SRP/TOTP.
+5. Deploy all remaining stacks (1.8).
 
-Laptop pickup plan:
+## AWS Root User Warning
 
-1. Run backend tests and build (`dotnet restore/build/test` on `backend/ThcMealPlanner.sln`).
-2. Run frontend install/lint/build/test with coverage in `frontend/`.
-3. Run infra install and `npx cdk diff --context env=dev` in `infra/`.
-4. Trigger CI workflow and reconcile any runtime-only issues.
-5. Finish 1.6 by swapping placeholder frontend auth service for live Cognito SRP/TOTP once AuthStack is deployed.
+**You are currently authenticated as the AWS root user.** This should be replaced with a dedicated IAM entity before running CDK deployments:
+
+1. In AWS Console → IAM → Create user `thc-meal-planner-deployer`
+2. Attach `AdministratorAccess` policy (or a scoped CDK deploy policy)
+3. Generate access keys → run `aws configure --profile thc`
+4. Update `CDK_DEFAULT_ACCOUNT` and use `--profile thc` on CDK commands
+5. Consider using AWS SSO/IAM Identity Center for longer-term credential management

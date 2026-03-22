@@ -4,7 +4,7 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 
 describe('App', () => {
-  it('renders login page by default when unauthenticated', () => {
+  it('renders login page by default when unauthenticated', async () => {
     window.history.pushState({}, '', '/login');
 
     render(
@@ -15,10 +15,10 @@ describe('App', () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /sign in to your planner/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /sign in to your planner/i })).toBeInTheDocument();
   });
 
-  it('redirects protected routes to login when unauthenticated', () => {
+  it('redirects protected routes to login when unauthenticated', async () => {
     window.history.pushState({}, '', '/profile');
 
     render(
@@ -29,6 +29,6 @@ describe('App', () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /sign in to your planner/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /sign in to your planner/i })).toBeInTheDocument();
   });
 });

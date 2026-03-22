@@ -67,6 +67,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish Lambda (linux-arm64)
+        run: >
+          dotnet publish backend/ThcMealPlanner.Api/ThcMealPlanner.Api.csproj
+          -c Release -r linux-arm64 --self-contained true
+          -p:PublishAot=false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

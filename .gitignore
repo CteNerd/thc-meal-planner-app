@@ -10,6 +10,7 @@ bin/
 obj/
 out/
 publish/
+*.tsbuildinfo
 
 # .NET
 *.user
@@ -25,6 +26,10 @@ coverage/
 # CDK
 cdk.out/
 cdk.context.json
+
+# Keep the CDK app entrypoint tracked
+!infra/bin/
+!infra/bin/app.ts
 
 # IDE
 .vs/
