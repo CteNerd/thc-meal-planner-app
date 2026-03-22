@@ -16,6 +16,8 @@ export function LoginForm() {
   const [password, setPassword] = useState('');
   const [requiresTotp, setRequiresTotp] = useState(false);
   const [requiresNewPassword, setRequiresNewPassword] = useState(false);
+  const [requiresMfaSetup, setRequiresMfaSetup] = useState(false);
+  const [mfaSetupSecret, setMfaSetupSecret] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -75,6 +77,9 @@ export function LoginForm() {
                 }
 
                 if (caughtError.code === 'MFA_SETUP_REQUIRED') {
+                  setRequiresMfaSetup(true);
+                  setRequiresTotp(true);
+                  setMfaSetupSecret(caughtError.metadata?.setupSecretCode ?? null);
                   setError('Your account requires TOTP setup before sign-in can complete.');
                   return;
                 }
@@ -120,6 +125,15 @@ export function LoginForm() {
           ) : null}
 
           {requiresTotp ? <TotpInput value={totpCode} onChange={setTotpCode} /> : null}
+
+          {requiresMfaSetup && mfaSetupSecret ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">Set up your authenticator app first</p>
+              <p className="mt-1">Add a new TOTP account in your app and use this setup key:</p>
+              <p className="mt-2 break-all font-mono text-xs">{mfaSetupSecret}</p>
+              <p className="mt-2">After adding it, enter the generated 6-digit code above and submit again.</p>
+            </div>
+          ) : null}
 
           <label className="flex items-center gap-3 text-sm text-slate-600">
             <input

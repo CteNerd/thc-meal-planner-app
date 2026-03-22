@@ -41,12 +41,22 @@ export type AuthService = {
 export class AuthChallengeError extends Error {
   public constructor(
     public readonly code: 'TOTP_REQUIRED' | 'NEW_PASSWORD_REQUIRED' | 'MFA_SETUP_REQUIRED',
-    message: string
+    message: string,
+    public readonly metadata?: Record<string, string>
   ) {
     super(message);
     this.name = 'AuthChallengeError';
   }
 }
+
+type PendingChallengeState = {
+  cognitoUser: CognitoUser;
+  email: string;
+  challenge: 'MFA_SETUP_REQUIRED';
+  setupSecretCode?: string;
+};
+
+let pendingChallengeState: PendingChallengeState | null = null;
 
 const SESSION_STORAGE_KEY = 'thc-meal-planner-auth-session';
 const STORAGE_PREFERENCE_KEY = 'thc-meal-planner-auth-storage';
@@ -138,6 +148,48 @@ class CognitoAuthService implements AuthService {
   public async login(request: LoginRequest): Promise<AuthSession> {
     loginRequestSchema.parse(request);
 
+    if (pendingChallengeState?.challenge === 'MFA_SETUP_REQUIRED') {
+      if (!request.totpCode) {
+        throw new AuthChallengeError(
+          'MFA_SETUP_REQUIRED',
+          'Set up your authenticator app and enter a 6-digit code to continue.',
+          {
+            setupSecretCode: pendingChallengeState.setupSecretCode ?? '',
+            email: pendingChallengeState.email
+          }
+        );
+      }
+
+      const totpCode = request.totpCode;
+
+      return await new Promise<AuthSession>((resolve, reject) => {
+        pendingChallengeState?.cognitoUser.verifySoftwareToken(
+          totpCode,
+          'thc-meal-planner-device',
+          {
+            onSuccess: () => {
+              pendingChallengeState?.cognitoUser.sendMFACode(
+                totpCode,
+                {
+                  onSuccess: (session) => {
+                    pendingChallengeState = null;
+                    resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
+                  },
+                  onFailure: (error) => {
+                    reject(error);
+                  }
+                },
+                'SOFTWARE_TOKEN_MFA'
+              );
+            },
+            onFailure: (error) => {
+              reject(error);
+            }
+          }
+        );
+      });
+    }
+
     window.localStorage.setItem(STORAGE_PREFERENCE_KEY, request.rememberDevice ? 'local' : 'session');
     const storage = getPreferredStorage();
     const userPool = new CognitoUserPool({ ...this.poolData, Storage: storage });
@@ -190,7 +242,28 @@ class CognitoAuthService implements AuthService {
           }, 'SOFTWARE_TOKEN_MFA');
         },
         mfaSetup: () => {
-          reject(new AuthChallengeError('MFA_SETUP_REQUIRED', 'MFA setup is required before first sign-in can complete.'));
+          cognitoUser.associateSoftwareToken({
+            associateSecretCode: (secretCode) => {
+              pendingChallengeState = {
+                cognitoUser,
+                email: request.email,
+                challenge: 'MFA_SETUP_REQUIRED',
+                setupSecretCode: secretCode
+              };
+
+              reject(new AuthChallengeError(
+                'MFA_SETUP_REQUIRED',
+                'MFA setup is required before first sign-in can complete.',
+                {
+                  setupSecretCode: secretCode,
+                  email: request.email
+                }
+              ));
+            },
+            onFailure: (error) => {
+              reject(error);
+            }
+          });
         },
         newPasswordRequired: () => {
           if (!request.newPassword) {
@@ -221,7 +294,28 @@ class CognitoAuthService implements AuthService {
               }, 'SOFTWARE_TOKEN_MFA');
             },
             mfaSetup: () => {
-              reject(new AuthChallengeError('MFA_SETUP_REQUIRED', 'MFA setup is required before first sign-in can complete.'));
+              cognitoUser.associateSoftwareToken({
+                associateSecretCode: (secretCode) => {
+                  pendingChallengeState = {
+                    cognitoUser,
+                    email: request.email,
+                    challenge: 'MFA_SETUP_REQUIRED',
+                    setupSecretCode: secretCode
+                  };
+
+                  reject(new AuthChallengeError(
+                    'MFA_SETUP_REQUIRED',
+                    'MFA setup is required before first sign-in can complete.',
+                    {
+                      setupSecretCode: secretCode,
+                      email: request.email
+                    }
+                  ));
+                },
+                onFailure: (error) => {
+                  reject(error);
+                }
+              });
             }
           });
         }
