@@ -107,6 +107,8 @@ thc-meal-planner-app/
 | [COPILOT_CONFIG.md](COPILOT_CONFIG.md) | Agent definitions, instructions, skills, coding agent workflow |
 | [COST_ANALYSIS.md](COST_ANALYSIS.md) | Per-service AWS cost estimates |
 | [MILESTONES.md](MILESTONES.md) | Phased delivery plan with milestone criteria |
+| [PHASE0_CHECKLIST.md](PHASE0_CHECKLIST.md) | Living checklist and backlog plan for Phase 0 setup/validation |
+| [PHASE1_CHECKLIST.md](PHASE1_CHECKLIST.md) | Living checklist and backlog plan for Phase 1 foundation work |
 | [COOKBOOK_SPEC.md](COOKBOOK_SPEC.md) | Recipe management, URL import, image upload, favorites |
 | [TESTING_SPEC.md](TESTING_SPEC.md) | Testing pyramid, 80% coverage, tools, CI gates |
 

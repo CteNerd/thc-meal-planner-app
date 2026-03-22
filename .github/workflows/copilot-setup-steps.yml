@@ -1,0 +1,59 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    name: Validate Monorepo Tooling
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore backend
+        working-directory: ./backend
+        run: dotnet restore
+
+      - name: Build backend
+        working-directory: ./backend
+        run: dotnet build --no-restore
+
+      - name: Test backend with coverage
+        working-directory: ./backend
+        run: dotnet test --no-build --collect:"XPlat Code Coverage"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Test frontend with coverage
+        working-directory: ./frontend
+        run: npm run test -- --coverage
+
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Install infra dependencies
+        working-directory: ./infra
+        run: npm ci
+
+      - name: CDK synth (dev)
+        working-directory: ./infra
+        run: npx cdk synth --context env=dev

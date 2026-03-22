@@ -1,0 +1,59 @@
+name: Phase 0 Copilot Checklist Item
+description: Track a single Phase 0 setup or verification task.
+title: "[Phase 0] "
+labels:
+  - copilot
+  - copilot:docs
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for tracking setup and verification work in Phase 0.
+
+  - type: dropdown
+    id: task
+    attributes:
+      label: Milestone Task
+      options:
+        - 0.1 Initialize .github structure
+        - 0.2 Create copilot-instructions.md
+        - 0.3 Create adapted agents (4)
+        - 0.4 Create new agents (4)
+        - 0.5 Add instructions (8)
+        - 0.6 Add skills (15)
+        - 0.7 Add copilot workflow
+        - 0.8 Ensure specs available
+        - 0.9 Verify agent functionality
+    validations:
+      required: true
+
+  - type: dropdown
+    id: focus
+    attributes:
+      label: Focus Area Label
+      description: Add one extra label after creating the issue.
+      options:
+        - copilot:backend
+        - copilot:frontend
+        - copilot:infra
+        - copilot:docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Define clear completion criteria.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Link related files, PRs, or checklist entries.

@@ -1,0 +1,19 @@
+- name: copilot
+  color: "0E8A16"
+  description: Triggers or tracks Copilot coding agent work
+
+- name: copilot:backend
+  color: "1D76DB"
+  description: Copilot work focused on .NET API or backend services
+
+- name: copilot:frontend
+  color: "FBCA04"
+  description: Copilot work focused on React frontend changes
+
+- name: copilot:infra
+  color: "5319E7"
+  description: Copilot work focused on infrastructure or CI/CD
+
+- name: copilot:docs
+  color: "006B75"
+  description: Copilot work focused on docs/specifications only

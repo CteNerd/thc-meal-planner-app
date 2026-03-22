@@ -12,6 +12,8 @@ See [specs/](specs/) for full project specifications.
 |-----------|-------------|
 | [specs/README.md](specs/README.md) | Project overview, architecture, and spec index |
 | [specs/MILESTONES.md](specs/MILESTONES.md) | 8-phase delivery plan (start with Phase 0) |
+| [specs/PHASE0_CHECKLIST.md](specs/PHASE0_CHECKLIST.md) | Living Phase 0 setup and verification checklist |
+| [specs/PHASE1_CHECKLIST.md](specs/PHASE1_CHECKLIST.md) | Living Phase 1 foundation checklist |
 | [specs/COPILOT_CONFIG.md](specs/COPILOT_CONFIG.md) | Agent, instruction, and skill configuration |
 
 ## Implementation Verification Policy
