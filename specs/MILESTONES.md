@@ -49,7 +49,7 @@
 | 1.3 | Scaffold React 19 + Vite + TailwindCSS | Create app with routing, TailwindCSS config, component folders |
 | 1.4 | Create CDK project | 6 stacks defined (auth, data, api, frontend, notifications, secrets) |
 | 1.5 | Deploy AuthStack | Cognito User Pool + Client, provision 2 users |
-| 1.6 | Implement login flow | Frontend: login form + TOTP → Backend: JWT validation middleware |
+| 1.6 | Implement login flow | Frontend: native Cognito user pool SDK (SRP + TOTP, no Amplify) → Backend: JWT validation middleware |
 | 1.7 | GitHub Actions CI pipeline | Build + test + lint for both .NET and React |
 | 1.8 | Deploy to dev | Full pipeline: CDK deploy → S3 sync → CloudFront |
 

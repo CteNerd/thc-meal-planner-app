@@ -27,7 +27,7 @@ export function LoginForm() {
           <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Phase 1.3</p>
           <h1 className="text-3xl font-bold text-slate-900">Sign in to your planner</h1>
           <p className="text-sm text-slate-600">
-            This scaffold mirrors the eventual Cognito + TOTP flow with a local placeholder experience.
+            Sign in with Cognito user pool credentials and your 6-digit TOTP code.
           </p>
           <p className="text-xs text-slate-500">Auth mode: {authMode}</p>
         </div>

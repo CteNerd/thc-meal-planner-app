@@ -11,7 +11,7 @@ Current scaffold (Phase 1.3):
 
 Next implementation tasks:
 
-1. Replace placeholder auth service with Cognito-backed SRP + refresh flow.
+1. Continue hardening native Cognito user pool SRP + refresh flow (no Amplify dependency).
 2. Connect protected routes to real API data and auth headers.
 3. Add responsive navigation for desktop and mobile.
 4. Wire refresh-token cookie handling once backend/session infrastructure is live.

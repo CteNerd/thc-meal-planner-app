@@ -17,7 +17,7 @@ Single-page application built with React 19, TypeScript, Vite, and TailwindCSS. 
 | React Router | 7.x | Client-side routing |
 | Vitest | 2.x | Unit testing |
 | Playwright | 1.x | E2E testing |
-| @aws-amplify/auth | Latest | Cognito auth SDK (auth only, not Amplify hosting) |
+| amazon-cognito-identity-js | Latest | Native Cognito User Pools SDK (SRP + TOTP, no Amplify dependency) |
 
 ---
 

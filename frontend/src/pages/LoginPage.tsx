@@ -10,7 +10,7 @@ export function LoginPage() {
             Plan the week, protect dietary constraints, and keep the grocery list in sync.
           </h1>
           <p className="max-w-xl text-base text-slate-600 sm:text-lg">
-            This frontend foundation gives us routing, Tailwind, tests, and a placeholder auth flow so the real Cognito integration can slot in cleanly.
+            This frontend is wired for Cognito user-pool authentication with TOTP MFA and protected API access.
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <Feature label="Meal plans" value="Weekly view" />
