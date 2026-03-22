@@ -16,7 +16,13 @@ type AuthState = {
   user: AuthUser | null;
   accessToken: string | null;
   authMode: 'placeholder' | 'cognito';
-  login: (email: string, password: string, totpCode: string, rememberDevice: boolean) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    totpCode: string | undefined,
+    rememberDevice: boolean,
+    newPassword?: string
+  ) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 };
@@ -79,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     accessToken: session?.accessToken ?? null,
     authMode: authService.getMode(),
-    login: async (email, password, totpCode, rememberDevice) => {
-      const nextSession = await authService.login({ email, password, totpCode, rememberDevice });
+    login: async (email, password, totpCode, rememberDevice, newPassword) => {
+      const nextSession = await authService.login({ email, password, totpCode, rememberDevice, newPassword });
       setSession(nextSession);
     },
     logout: async () => {

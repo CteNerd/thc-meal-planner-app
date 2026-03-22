@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { AuthChallengeError } from '../../services/auth';
 import { isTotpCode } from '../../utils/validators';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -14,6 +15,8 @@ export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [requiresTotp, setRequiresTotp] = useState(false);
+  const [requiresNewPassword, setRequiresNewPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,21 +41,46 @@ export function LoginForm() {
             event.preventDefault();
             setError(null);
 
-            if (!requiresTotp) {
-              setRequiresTotp(true);
-              return;
-            }
-
-            if (!isTotpCode(totpCode)) {
+            if (requiresTotp && !isTotpCode(totpCode)) {
               setError('Enter a valid 6-digit TOTP code.');
               return;
             }
 
+            if (requiresNewPassword && newPassword.length < 12) {
+              setError('Use a new password with at least 12 characters.');
+              return;
+            }
+
             try {
-              await login(email, password, totpCode, rememberDevice);
+              await login(
+                email,
+                password,
+                requiresTotp ? totpCode : undefined,
+                rememberDevice,
+                requiresNewPassword ? newPassword : undefined
+              );
               navigate(targetPath, { replace: true });
-            } catch {
-              setError('Unable to complete sign-in. Verify credentials and TOTP code.');
+            } catch (caughtError) {
+              if (caughtError instanceof AuthChallengeError) {
+                if (caughtError.code === 'TOTP_REQUIRED') {
+                  setRequiresTotp(true);
+                  setError('Enter your 6-digit TOTP code to continue.');
+                  return;
+                }
+
+                if (caughtError.code === 'NEW_PASSWORD_REQUIRED') {
+                  setRequiresNewPassword(true);
+                  setError('Set a new password to complete your first sign-in.');
+                  return;
+                }
+
+                if (caughtError.code === 'MFA_SETUP_REQUIRED') {
+                  setError('Your account requires TOTP setup before sign-in can complete.');
+                  return;
+                }
+              }
+
+              setError('Unable to complete sign-in. Verify credentials and any required challenges.');
             }
           }}
         >
@@ -71,12 +99,25 @@ export function LoginForm() {
             <span className="text-sm font-medium text-slate-700">Password</span>
             <Input
               type="password"
-              placeholder="Enter password"
+              placeholder={requiresNewPassword ? 'Temporary password from email' : 'Enter password'}
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
+
+          {requiresNewPassword ? (
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">New password</span>
+              <Input
+                type="password"
+                placeholder="Set a new permanent password"
+                required
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+              />
+            </label>
+          ) : null}
 
           {requiresTotp ? <TotpInput value={totpCode} onChange={setTotpCode} /> : null}
 
@@ -93,7 +134,7 @@ export function LoginForm() {
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
 
           <Button className="w-full" type="submit" disabled={isLoading}>
-            {requiresTotp ? 'Verify code' : 'Continue'}
+            {requiresTotp ? 'Verify code' : requiresNewPassword ? 'Set password and continue' : 'Continue'}
           </Button>
         </form>
       </div>

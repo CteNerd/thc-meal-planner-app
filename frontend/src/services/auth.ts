@@ -11,7 +11,8 @@ import {
 const loginRequestSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  totpCode: z.string().regex(/^\d{6}$/),
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
+  newPassword: z.string().min(12).optional(),
   rememberDevice: z.boolean()
 });
 
@@ -36,6 +37,16 @@ export type AuthService = {
   logout: () => Promise<void>;
   getMode: () => 'placeholder' | 'cognito';
 };
+
+export class AuthChallengeError extends Error {
+  public constructor(
+    public readonly code: 'TOTP_REQUIRED' | 'NEW_PASSWORD_REQUIRED' | 'MFA_SETUP_REQUIRED',
+    message: string
+  ) {
+    super(message);
+    this.name = 'AuthChallengeError';
+  }
+}
 
 const SESSION_STORAGE_KEY = 'thc-meal-planner-auth-session';
 const STORAGE_PREFERENCE_KEY = 'thc-meal-planner-auth-storage';
@@ -149,6 +160,11 @@ class CognitoAuthService implements AuthService {
           reject(error);
         },
         mfaRequired: () => {
+          if (!request.totpCode) {
+            reject(new AuthChallengeError('TOTP_REQUIRED', 'A TOTP code is required to complete sign-in.'));
+            return;
+          }
+
           cognitoUser.sendMFACode(request.totpCode, {
             onSuccess: (session) => {
               resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
@@ -159,6 +175,11 @@ class CognitoAuthService implements AuthService {
           }, 'SOFTWARE_TOKEN_MFA');
         },
         totpRequired: () => {
+          if (!request.totpCode) {
+            reject(new AuthChallengeError('TOTP_REQUIRED', 'A TOTP code is required to complete sign-in.'));
+            return;
+          }
+
           cognitoUser.sendMFACode(request.totpCode, {
             onSuccess: (session) => {
               resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
@@ -168,8 +189,41 @@ class CognitoAuthService implements AuthService {
             }
           }, 'SOFTWARE_TOKEN_MFA');
         },
+        mfaSetup: () => {
+          reject(new AuthChallengeError('MFA_SETUP_REQUIRED', 'MFA setup is required before first sign-in can complete.'));
+        },
         newPasswordRequired: () => {
-          reject(new Error('Password reset required before completing login.'));
+          if (!request.newPassword) {
+            reject(new AuthChallengeError('NEW_PASSWORD_REQUIRED', 'A new password is required before sign-in can continue.'));
+            return;
+          }
+
+          cognitoUser.completeNewPasswordChallenge(request.newPassword, {}, {
+            onSuccess: (session) => {
+              resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
+            },
+            onFailure: (error) => {
+              reject(error);
+            },
+            mfaRequired: () => {
+              if (!request.totpCode) {
+                reject(new AuthChallengeError('TOTP_REQUIRED', 'A TOTP code is required to complete sign-in.'));
+                return;
+              }
+
+              cognitoUser.sendMFACode(request.totpCode, {
+                onSuccess: (session) => {
+                  resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
+                },
+                onFailure: (error) => {
+                  reject(error);
+                }
+              }, 'SOFTWARE_TOKEN_MFA');
+            },
+            mfaSetup: () => {
+              reject(new AuthChallengeError('MFA_SETUP_REQUIRED', 'MFA setup is required before first sign-in can complete.'));
+            }
+          });
         }
       });
     });
