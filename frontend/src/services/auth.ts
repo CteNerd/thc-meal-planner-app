@@ -167,22 +167,23 @@ class CognitoAuthService implements AuthService {
           totpCode,
           'thc-meal-planner-device',
           {
-            onSuccess: () => {
-              pendingChallengeState?.cognitoUser.sendMFACode(
-                totpCode,
-                {
-                  onSuccess: (session) => {
-                    pendingChallengeState = null;
-                    resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
-                  },
-                  onFailure: (error) => {
-                    reject(error);
-                  }
-                },
-                'SOFTWARE_TOKEN_MFA'
-              );
+            onSuccess: (result) => {
+              if (
+                result &&
+                typeof (result as CognitoUserSession).getIdToken === 'function' &&
+                typeof (result as CognitoUserSession).getAccessToken === 'function'
+              ) {
+                pendingChallengeState = null;
+                const session = result as CognitoUserSession;
+                resolve(toAuthSession(session.getIdToken().getJwtToken(), session.getAccessToken().getJwtToken()));
+                return;
+              }
+
+              pendingChallengeState = null;
+              reject(new Error('MFA setup completed but no authenticated session was returned. Please sign in again.'));
             },
             onFailure: (error) => {
+              pendingChallengeState = null;
               reject(error);
             }
           }
