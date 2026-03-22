@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.nuget/
+packages/
+
+# Build outputs
+dist/
+build/
+bin/
+obj/
+out/
+publish/
+
+# .NET
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb
+
+# Frontend
+.vite/
+coverage/
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# IDE
+.vs/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Local PII data (profiles, seed data — NEVER commit)
+.local/
+
+# Migration seed data (copied from .local/ at runtime)
+**/SeedData/Users.json
+**/SeedData/Constraints.json
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Test results
+TestResults/
+playwright-report/
+test-results/
