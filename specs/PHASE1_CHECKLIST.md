@@ -11,7 +11,7 @@ Living tracker for foundation work: scaffolding, CI/CD, infra baseline, and auth
 | 1.3 | Scaffold React 19 + Vite + TailwindCSS | Done | `frontend/package.json`, Vite config, router shell, Tailwind styles, starter test |
 | 1.4 | Create CDK project with 6 stacks | Done | `infra/package.json`, `infra/bin/app.ts`, config files, shared constructs, 6 stack skeletons — `cdk synth` produces all 6 CF templates cleanly |
 | 1.5 | Deploy AuthStack | Done | Deployed with profile `thc`; outputs: UserPoolId `us-east-1_OWufvWke8`, UserPoolClientId `1a0hgiq7vfdc7id09ogv188alg`, UserPoolDomain `thc-meal-planner-dev-auth` |
-| 1.6 | Implement login flow with TOTP | In Progress | Backend JWT/auth + protected session route, auth tests (unauthorized/authenticated), frontend native Cognito user-pool auth service (SRP + TOTP + refresh, no Amplify), TOTP flow, protected routes, API auth header + 401 refresh handling |
+| 1.6 | Implement login flow with TOTP | In Progress | Backend JWT/auth + protected session route, auth tests (unauthorized/authenticated), frontend native Cognito user-pool auth service (SRP + TOTP + refresh, no Amplify), TOTP flow, protected routes, API auth header + 401 refresh handling. Cognito users provisioned for `rtomlin62@gmail.com` and `ashuah.tomlin@gmail.com` (both `FORCE_CHANGE_PASSWORD`); pending first login + TOTP enrollment verification. |
 | 1.7 | Add CI build/test/lint pipeline | Done | `.github/workflows/ci.yml` now passes in GitHub Actions on `main` (run `23411889262`); backend, frontend, and infra jobs all succeeded |
 | 1.8 | Deploy to dev | Done | OIDC-based deploy workflow `.github/workflows/deploy-dev.yml` executed successfully on `main` (run `23412560524`): CDK deploy + frontend publish + CloudFront invalidation |
 

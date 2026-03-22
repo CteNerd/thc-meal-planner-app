@@ -7,6 +7,7 @@ Family meal planning web application for a small household.
 - Backend: ASP.NET Core 9 on AWS Lambda (.NET AOT)
 - Database: Amazon DynamoDB (6 tables, on-demand pricing)
 - Auth: Amazon Cognito with TOTP MFA
+- Frontend auth implementation: native Cognito user pool SDK (`amazon-cognito-identity-js`), no Amplify dependency
 - AI: OpenAI function calling for chatbot and planning tasks
 - IaC: AWS CDK (TypeScript)
 - Hosting: CloudFront + S3 (OAC)
