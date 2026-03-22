@@ -1,0 +1,14 @@
+# CODEOWNERS — CteNerd is required reviewer for all PRs
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: repo owner reviews everything
+* @CteNerd
+
+# Specs (architecture decisions)
+/specs/ @CteNerd
+
+# Infrastructure (CDK changes need owner review)
+/infra/ @CteNerd
+
+# CI/CD and GitHub config
+/.github/ @CteNerd
