@@ -1,0 +1,134 @@
+name: Deploy Dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment context
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      DEPLOY_ENV: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve AWS account id
+        id: aws-account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish Lambda payload (linux-arm64)
+        run: >
+          dotnet publish backend/ThcMealPlanner.Api/ThcMealPlanner.Api.csproj
+          -c Release -r linux-arm64 --self-contained true
+          -p:PublishAot=false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install infra dependencies
+        working-directory: ./infra
+        run: npm ci
+
+      - name: Bootstrap CDK
+        working-directory: ./infra
+        run: npx cdk bootstrap aws://${{ steps.aws-account.outputs.account_id }}/${{ env.AWS_REGION }} --context env=${{ env.DEPLOY_ENV }}
+
+      - name: Deploy CDK stacks
+        working-directory: ./infra
+        run: npx cdk deploy --all --context env=${{ env.DEPLOY_ENV }} --require-approval never
+
+      - name: Resolve deployment outputs
+        id: outputs
+        run: |
+          AUTH_STACK="ThcMealPlanner-${DEPLOY_ENV}-Auth"
+          FRONTEND_STACK="ThcMealPlanner-${DEPLOY_ENV}-Frontend"
+
+          USER_POOL_ID=$(aws cloudformation describe-stacks \
+            --stack-name "$AUTH_STACK" \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" \
+            --output text)
+
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+            --stack-name "$AUTH_STACK" \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" \
+            --output text)
+
+          FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "$FRONTEND_STACK" \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+            --output text)
+
+          DISTRIBUTION_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name "$FRONTEND_STACK" \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionDomainName'].OutputValue" \
+            --output text)
+
+          echo "user_pool_id=$USER_POOL_ID" >> "$GITHUB_OUTPUT"
+          echo "user_pool_client_id=$USER_POOL_CLIENT_ID" >> "$GITHUB_OUTPUT"
+          echo "frontend_bucket=$FRONTEND_BUCKET" >> "$GITHUB_OUTPUT"
+          echo "distribution_domain=$DISTRIBUTION_DOMAIN" >> "$GITHUB_OUTPUT"
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        env:
+          VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
+          VITE_COGNITO_USER_POOL_ID: ${{ steps.outputs.outputs.user_pool_id }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.outputs.outputs.user_pool_client_id }}
+        run: npm run build
+
+      - name: Publish frontend assets
+        working-directory: ./frontend
+        run: aws s3 sync dist s3://${{ steps.outputs.outputs.frontend_bucket }} --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?DomainName=='${{ steps.outputs.outputs.distribution_domain }}'].Id | [0]" \
+            --output text)
+
+          if [ -n "$DISTRIBUTION_ID" ] && [ "$DISTRIBUTION_ID" != "None" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths '/*'
+          else
+            echo "CloudFront distribution not found for domain ${{ steps.outputs.outputs.distribution_domain }}"
+            exit 1
+          fi

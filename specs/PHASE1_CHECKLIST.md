@@ -13,7 +13,7 @@ Living tracker for foundation work: scaffolding, CI/CD, infra baseline, and auth
 | 1.5 | Deploy AuthStack | Done | Deployed with profile `thc`; outputs: UserPoolId `us-east-1_OWufvWke8`, UserPoolClientId `1a0hgiq7vfdc7id09ogv188alg`, UserPoolDomain `thc-meal-planner-dev-auth` |
 | 1.6 | Implement login flow with TOTP | In Progress | Backend JWT/auth + protected session route, auth tests (unauthorized/authenticated), frontend native Cognito user-pool auth service (SRP + TOTP + refresh, no Amplify), TOTP flow, protected routes, API auth header + 401 refresh handling |
 | 1.7 | Add CI build/test/lint pipeline | Done | `.github/workflows/ci.yml` now passes in GitHub Actions on `main` (run `23411889262`); backend, frontend, and infra jobs all succeeded |
-| 1.8 | Deploy to dev | Not Started | Pending stack implementation and CI/CD |
+| 1.8 | Deploy to dev | In Progress | Added `.github/workflows/deploy-dev.yml` for OIDC-based CDK deploy + frontend publish/invalidation; pending GitHub OIDC role secret and first workflow execution |
 
 ## Notes
 
@@ -28,7 +28,7 @@ Track items that require capabilities outside the current Codespaces session:
 |---|---|---|
 | 0.9 | GitHub issue pickup and workflow execution require repository-side automation and validation outside this session | Run tagged test issues and workflow checks from a fully authorized environment |
 | 1.6 | End-to-end Cognito SRP + TOTP verification requires deployed User Pool, app client, and real token issuance | Replace placeholder frontend auth service with live Cognito integration and verify protected API calls |
-| 1.8 | CDK deploy, S3 sync, and CloudFront invalidation require AWS credentials and runtime outputs | Deploy from a trusted local or cloud-enabled environment after 1.5 is complete |
+| 1.8 | GitHub workflow deploy requires OIDC role wiring (`AWS_ROLE_TO_ASSUME`) and first successful run evidence | Add IAM OIDC trust role + repository secret, then run `Deploy Dev` workflow and capture outputs |
 
 ## Session Checkpoint (2026-03-22, Laptop)
 
