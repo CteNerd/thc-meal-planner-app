@@ -12,7 +12,7 @@ Living tracker for foundation work: scaffolding, CI/CD, infra baseline, and auth
 | 1.4 | Create CDK project with 6 stacks | Done | `infra/package.json`, `infra/bin/app.ts`, config files, shared constructs, 6 stack skeletons — `cdk synth` produces all 6 CF templates cleanly |
 | 1.5 | Deploy AuthStack | Done | Deployed with profile `thc`; outputs: UserPoolId `us-east-1_OWufvWke8`, UserPoolClientId `1a0hgiq7vfdc7id09ogv188alg`, UserPoolDomain `thc-meal-planner-dev-auth` |
 | 1.6 | Implement login flow with TOTP | In Progress | Backend JWT/auth + protected session route, auth tests (unauthorized/authenticated), frontend auth context/service, TOTP flow, protected routes, API auth header + 401 refresh handling |
-| 1.7 | Add CI build/test/lint pipeline | In Progress | `.github/workflows/ci.yml` validated locally; first GitHub Actions run failed on frontend ESLint project-service config and infra `cdk diff` requiring AWS account resolution; follow-up fix committed locally |
+| 1.7 | Add CI build/test/lint pipeline | Done | `.github/workflows/ci.yml` now passes in GitHub Actions on `main` (run `23411889262`); backend, frontend, and infra jobs all succeeded |
 | 1.8 | Deploy to dev | Not Started | Pending stack implementation and CI/CD |
 
 ## Notes
@@ -46,9 +46,9 @@ Resolved all Codespaces-blocked backlog items:
 
 **Next steps:**
 
-1. Push the CI follow-up fix and confirm GitHub Actions goes green.
-2. Replace placeholder frontend auth service with live Cognito SRP/TOTP using the deployed User Pool and client.
-3. Deploy remaining stacks for the dev environment (data, secrets, api, frontend, notifications).
+1. Replace placeholder frontend auth service with live Cognito SRP/TOTP using the deployed User Pool and client.
+2. Deploy remaining stacks for the dev environment (data, secrets, api, frontend, notifications).
+3. Validate Phase 0.9 domain and engineering agents against real prompts.
 
 ## AWS Profile Status
 

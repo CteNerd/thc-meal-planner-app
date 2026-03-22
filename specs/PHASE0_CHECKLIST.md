@@ -24,7 +24,7 @@ Use these labels for Phase 0 tracking issues:
 | 0.6 | Add skills (15) | Done | Files under `.github/skills/` |
 | 0.7 | Add `copilot-setup-steps.yml` workflow | Done | `.github/workflows/copilot-setup-steps.yml` |
 | 0.8 | Ensure `specs/` docs are available to agents | Done | `specs/` folder in repository |
-| 0.9 | Verify agent functionality in practice | Not Started | Run prompt tests once Phase 1 scaffolding exists |
+| 0.9 | Verify agent functionality in practice | In Progress | Phase 1 scaffolding exists; CI workflow run `23411889262` passed after scaffolding fixes. Domain and engineering prompt validation still pending. |
 
 ## Milestone Criteria Validation
 
@@ -60,6 +60,11 @@ Create and keep these issues open until validated:
    - Acceptance:
      - Workflow executes successfully after `backend/`, `frontend/`, `infra/` are scaffolded.
      - Build/test/lint steps are green or failures are actionable.
+
+## Checkpoint (2026-03-22)
+
+- Workflow validation portion of 0.9 is now satisfied: GitHub Actions CI run `23411889262` completed successfully on `main` after Phase 1 scaffolding.
+- Remaining work for 0.9 is prompt-based validation of domain and engineering agents against real tasks.
 
 ## Notes
 
