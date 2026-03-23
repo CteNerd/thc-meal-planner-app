@@ -13,7 +13,7 @@ Use two coordinated lanes to increase throughput while avoiding overlap:
 - **Mac Mini lane**: AWS credentialed and deployment-heavy tasks (CDK deploys, migrations, integration verification).
 - **Codespaces lane**: feature implementation, unit tests, and non-deploy development tasks.
 
-Branching strategy for all remaining phases:
+Operating model for all remaining phases:
 
 Both Mac Mini and Codespaces work directly on `main`. No feature branches or PRs — resolve conflicts in the IDE. Push after each subphase or logical commit unit to stay in sync.
 
@@ -22,6 +22,14 @@ Sync policy for both lanes:
 - Check in after each subphase or commit, and at least daily.
 - Update the current phase checklist with status, owner, and blockers.
 - Announce any contract changes (API shape, table keys/indexes, env vars) before pushing.
+
+Execution principles informed by Phase 2:
+
+- **Codespaces should own contract-first feature delivery**: API shapes, validators, UI implementation, unit tests, and checklist notes can progress quickly without waiting for AWS access.
+- **Mac Mini should own credentialed and integrated verification work**: stack deploys, migrations, secret management, real-session checks, integrated build/test runs, and runtime validation against deployed resources.
+- **Use small validation loops**: land implementation in Codespaces, then verify quickly on Mac Mini before the next contract expands.
+- **Treat runtime and deployment findings as shared contracts**: once Mac Mini verifies a table name, index name, secret ARN, or behavior in AWS, record it immediately in the phase checklist or related docs.
+- **Prefer lane specialization over duplicated effort**: do not run the same deploy, migration, or long integrated verification in both environments unless reproducing a failure.
 
 ---
 
@@ -130,7 +138,8 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 - Dependent profiles (Child 1, Child 2) visible in family management UI
 - Profile edits persist to DynamoDB
 - Migration script validates all data correctly (4 profiles total)
-- Adult 1 has no severe allergies; Adult 2 has severe food allergy (anaphylaxis-level)
+- Adult 1 has no severe allergies
+- Adult 2 profile reflects current confirmed preferences, exclusions, and non-allergy constraints
 
 ### Ownership Guidance (Parallel Lanes)
 
@@ -168,8 +177,8 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 
 | Lane | Recommended Scope |
 |---|---|
-| Mac Mini | S3/image infra verification, migration execution, end-to-end cloud checks |
-| Codespaces | Recipe CRUD APIs, cookbook UI, favorites, URL import parsing and tests |
+| Mac Mini | Image/storage infrastructure verification, recipe migration execution after record confirmation, deployed upload flow checks, CloudFront/image-serving validation, end-to-end smoke checks against real auth sessions |
+| Codespaces | Recipe CRUD contracts and validators, cookbook browse/detail/create-edit UI, favorites feature, URL import parsing workflow, unit/integration tests, and checklist/status maintenance |
 
 ---
 
@@ -199,8 +208,8 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 
 | Lane | Recommended Scope |
 |---|---|
-| Mac Mini | Runtime prompt/config verification in deployed environment, integration smoke tests |
-| Codespaces | Constraint engine, planning APIs, weekly UI, nutrition/quality scoring and tests |
+| Mac Mini | Runtime verification of OpenAI/config wiring, deployed constraint behavior checks, integration smoke tests using real profile and recipe data, and any environment-backed troubleshooting |
+| Codespaces | Constraint engine implementation, meal plan generation API contracts, weekly planning UI, swap/history/nutrition/quality scoring features, deterministic validation, and automated tests |
 
 ---
 
@@ -236,8 +245,8 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 
 | Lane | Recommended Scope |
 |---|---|
-| Mac Mini | Multi-user real-time verification and cloud behavior checks under real auth sessions |
-| Codespaces | Grocery APIs, optimistic concurrency logic, polling, pantry/in-stock UX and tests |
+| Mac Mini | Multi-user verification under real auth sessions, cloud behavior checks for concurrency/polling, deployed TTL behavior validation, and troubleshooting of runtime synchronization issues |
+| Codespaces | Grocery list APIs, optimistic concurrency/versioning logic, polling behavior, pantry/in-stock features, responsive UI flows, and automated coverage for conflict and recovery paths |
 
 ---
 
@@ -268,8 +277,8 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 
 | Lane | Recommended Scope |
 |---|---|
-| Mac Mini | Secrets and environment verification for OpenAI integration; production-like behavioral checks |
-| Codespaces | Chat APIs, function-calling orchestration, chat UI, safety guardrails and tests |
+| Mac Mini | Secrets and environment verification for OpenAI integration, deployed behavior checks, latency/error-path validation, and runtime safety verification using real secrets/configuration |
+| Codespaces | Chat API contracts, function-calling orchestration, system prompt builder, chat UI, confirmation flows, conversation history support, safety guardrails, and automated tests |
 
 ---
 
@@ -303,8 +312,8 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 
 | Lane | Recommended Scope |
 |---|---|
-| Mac Mini | Production deploy orchestration, domain/budget/security rollout, final go-live verification |
-| Codespaces | PWA/responsive polish, dashboard, test coverage improvements, Playwright authoring |
+| Mac Mini | Production deploy orchestration, SES/domain/budget/security rollout, migration execution against production resources after explicit confirmation, and final go-live verification |
+| Codespaces | PWA and responsive polish, dashboard implementation, coverage improvements, Playwright authoring, notification feature code, and pre-production hardening tasks that do not require AWS credentials |
 
 ---
 
@@ -371,6 +380,6 @@ Each feature is considered done when:
 4. API returns appropriate HTTP status codes
 5. Error responses use RFC 9457 format
 6. Responsive at all 3 breakpoints
-7. PR reviewed (human or governance agent)
+7. Change reviewed (human or governance agent)
 8. CI pipeline passes
 9. Deployed to dev and manually verified
