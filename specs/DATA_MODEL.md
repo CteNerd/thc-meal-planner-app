@@ -61,7 +61,7 @@ Stores user profiles with full dietary information migrated from markdown profil
 
 Stores weekly meal plans with recipe references and nutritional summaries.
 
-**Table Name**: `thc-meal-planner-{env}-meal-plans`
+**Table Name**: `thc-meal-planner-{env}-mealplans`
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
@@ -205,7 +205,7 @@ Per-user recipe favorites with personal notes and portion overrides.
 
 Living document grocery list with per-item completion tracking and optimistic concurrency.
 
-**Table Name**: `thc-meal-planner-{env}-grocery-lists`
+**Table Name**: `thc-meal-planner-{env}-grocerylists`
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
@@ -292,7 +292,7 @@ During grocery list generation, ingredients matching pantry staples are auto-mar
 
 Stores AI chat conversation history per user with 30-day TTL.
 
-**Table Name**: `thc-meal-planner-{env}-chat-history`
+**Table Name**: `thc-meal-planner-{env}-chathistory`
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
