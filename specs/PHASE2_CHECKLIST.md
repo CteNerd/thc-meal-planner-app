@@ -57,9 +57,9 @@ Check-in template:
 - Lane: Codespaces
 - Task: 2.2
 - Branch: `cs/p2-2-dynamodb-data-layer`
-- Status: Done (Pending 2.1 validation)
+- Status: Done
 - Contracts touched: Backend DI registration for DynamoDB repository, `DynamoDb` app config section, document-type to table-name mapping contract
-- Blockers or handoff requests: Need Mac lane to confirm final deployed table names for `DynamoDb:Tables` mappings after DataStack deployment.
+- Blockers or handoff requests: None.
 
 ### 2026-03-23 - Codespaces lane
 
@@ -68,7 +68,7 @@ Check-in template:
 - Branch: `cs/p2-3-profile-api`
 - Status: In Progress
 - Contracts touched: Added `GET`/`PUT /api/profile`, merge-semantics upsert behavior, FluentValidation request contract, profile key contract (`PK=USER#{sub}`, `SK=PROFILE`)
-- Blockers or handoff requests: Confirm DataStack key-attribute casing (`pk/sk` vs `PK/SK`) and Users table deployed name for `DynamoDb:Tables` mapping.
+- Blockers or handoff requests: Align API `DynamoDb` config with deployed contract (`PK`/`SK` key attributes + concrete Users table name mapping).
 
 ### 2026-03-23 - Codespaces lane
 
@@ -79,16 +79,22 @@ Check-in template:
 - Contracts touched: No new contracts; operational handoff for rebase/conflict resolution and DataStack output validation
 - Blockers or handoff requests: Mac lane please run fetch/rebase from `main`, resolve conflicts if any, and report back final values for Users table name + key attribute casing used by deployed DataStack.
 
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.2, 2.3 docs reconciliation
+- Branch: `main`
+- Status: Done
+- Contracts touched: Confirmed DataStack table naming and key schema from infra source of truth (`thc-meal-planner-dev-*`, partition key `PK`, sort key `SK`)
+- Blockers or handoff requests: None for contracts; continue implementation alignment in backend config.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
 |---|---|---|---|---|
 | 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); deployed from `mac/p2-1-datastack`; PR #1 |
-| 2.2 | Build DynamoDB data access layer | Codespaces | Not Started | |
-| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | Not Started | |
-| 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | User-confirmed complete on 2026-03-23; awaiting output handoff to Codespaces for table/key config finalization |
-| 2.2 | Build DynamoDB data access layer | Codespaces | Done (Pending 2.1 validation) | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
-| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; awaiting DataStack contract validation |
+| 2.2 | Build DynamoDB data access layer | Codespaces | Done | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
+| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; pending backend config alignment to deployed `PK`/`SK` and table mapping |
 | 2.4 | CRUD `/api/family/dependents` | Codespaces | Not Started | |
 | 2.5 | Profile UI and API integration | Codespaces | Not Started | |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
@@ -110,6 +116,5 @@ Check-in template:
 2. Add integration tests for familyId enforcement at repository/service boundaries.
 3. Add UI test coverage for profile save and dependents CRUD happy path + validation errors.
 4. Confirm migration payload records with user before committing migration data or scripts.
-5. Mac lane handoff needed: confirm deployed Users table name and key-attribute casing so `DynamoDb:Tables` and key config can be finalized.
-6. Mac lane handoff needed: confirm GSI behavior for `FamilyIndex` against current profile record shape before starting 2.4 dependent CRUD.
-7. Mac lane handoff needed: perform `main` sync for `cs/p2-3-profile-api` branch and share conflict report/merge outcome because local terminal git execution is currently blocked in Codespaces (ENOPRO provider issue).
+5. Align backend `DynamoDb` app configuration with deployed contract (`PK`/`SK`, users table mapping).
+6. Add repository/service integration tests for `FamilyIndex` query behavior before starting 2.4 dependent CRUD.

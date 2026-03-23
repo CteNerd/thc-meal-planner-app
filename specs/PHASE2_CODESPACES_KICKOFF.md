@@ -34,6 +34,18 @@ CDK index contract has been established:
 - MealPlans: `StatusIndex` (`familyId` + `statusCreatedAt`)
 - Recipes: `CategoryIndex` (`category` + `name`), `CuisineIndex` (`cuisine` + `name`)
 
+DataStack key + table naming contract (confirmed in infra source):
+
+- Table primary keys: `PK` (partition key), `SK` (sort key)
+- Dev table names:
+	- `thc-meal-planner-dev-users`
+	- `thc-meal-planner-dev-mealplans`
+	- `thc-meal-planner-dev-recipes`
+	- `thc-meal-planner-dev-favorites`
+	- `thc-meal-planner-dev-grocerylists`
+	- `thc-meal-planner-dev-chathistory`
+- TTL attribute for expiring tables: `TTL`
+
 Reference implementation files:
 
 - `infra/lib/constructs/dynamo-table.ts`
