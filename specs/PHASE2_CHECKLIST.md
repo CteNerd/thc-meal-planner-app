@@ -67,16 +67,23 @@ Check-in template:
 
 - Lane: Codespaces
 - Task: 2.2, 2.3 docs reconciliation
-- Branch: `main`
 - Status: Done
 - Contracts touched: Confirmed DataStack table naming and key schema from infra source of truth (`thc-meal-planner-dev-*`, partition key `PK`, sort key `SK`)
 - Blockers or handoff requests: None for contracts; continue implementation alignment in backend config.
+
+### 2026-03-22 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.8 (next)
+- Status: Not Started — holding until Codespaces signals readiness for 2.6 handoff
+- Contracts touched: None yet
+- Blockers or handoff requests: 2.6 blocked on user confirmation of migration records; 2.8 SecretsStack queued as next Mac Mini work item.
 
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
 |---|---|---|---|---|
-| 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); deployed from `mac/p2-1-datastack`; PR #1 |
+| 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); committed to `main` 2026-03-22 |
 | 2.2 | Build DynamoDB data access layer | Codespaces | Done | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
 | 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; pending backend config alignment to deployed `PK`/`SK` and table mapping |
 | 2.4 | CRUD `/api/family/dependents` | Codespaces | Not Started | |
