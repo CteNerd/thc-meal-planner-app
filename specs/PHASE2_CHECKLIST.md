@@ -85,6 +85,15 @@ Check-in template:
 - Blockers or handoff requests: None for 2.6. Ready to proceed with 2.8 SecretsStack.
 - Evidence: Migration wrote 4 records (Roddy Tomlin, Ashuah Tomlin, Raelynn Tomlin, Kinsleigh Tomlin). FamilyIndex query for `familyId=FAM#tomlin` returned 4 records; users table scan count is 4.
 
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.8 SecretsStack deploy + verification
+- Status: Done
+- Contracts touched: Deployed `ThcMealPlanner-dev-Secrets`; validated secret resources and output ARNs for API consumption.
+- Blockers or handoff requests: None for deployment. OpenAI API key value population can be done separately via Secrets Manager when ready.
+- Evidence: CloudFormation `ThcMealPlanner-dev-Secrets` status `UPDATE_COMPLETE`; outputs include `OpenAiSecretArn` and `AppSecretsArn`; both secrets resolvable via `aws secretsmanager describe-secret`.
+
 ### 2026-03-23 - Codespaces lane
 
 - Lane: Codespaces
@@ -233,7 +242,7 @@ Check-in template:
 | 2.5 | Profile UI and API integration | Codespaces | Done | Profile UI/API integration + frontend error handling/tests completed; lint/build/tests green on `main` |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Done | User-confirmed records migrated successfully; FamilyIndex validation (`FAM#tomlin`) returned 4 records; users table count = 4 |
 | 2.7 | Family-scoped authorization enforcement | Codespaces | Done | Family-scoped service guardrails + ProblemDetails/validation contract assertions + auth-context tests completed; integrated backend tests green on `main` |
-| 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
+| 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Done | Stack `ThcMealPlanner-dev-Secrets` deployed (`UPDATE_COMPLETE`); outputs: `OpenAiSecretArn` and `AppSecretsArn`; secrets verified via `describe-secret` |
 
 ## Milestone Criteria Tracking
 
