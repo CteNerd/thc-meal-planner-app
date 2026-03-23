@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { ProfilePage } from './ProfilePage';

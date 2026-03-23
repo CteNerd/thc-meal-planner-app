@@ -213,17 +213,26 @@ Check-in template:
 - Contracts touched: Added frontend `apiFetch` retry/unauthorized behavior tests (refresh success/failure and retry-401 callback path) and backend ProblemDetails helper contract tests via internal test access (`InternalsVisibleTo`)
 - Blockers or handoff requests: Terminal ENOPRO still blocks integrated backend/frontend test execution and commit commands in this session.
 
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.3, 2.4, 2.5, 2.7 integrated validation
+- Status: Done
+- Contracts touched: Verified profile/dependent APIs and frontend profile integration by running integrated build/test on synced `main`.
+- Blockers or handoff requests: None for these items. Ready to begin 2.8.
+- Evidence: `backend` test suite passed (`53/53`); `frontend` lint/build/test passed (`16/16` tests, no lint errors).
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
 |---|---|---|---|---|
 | 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); committed to `main` 2026-03-22 |
 | 2.2 | Build DynamoDB data access layer | Codespaces | Done | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
-| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + expanded endpoint and validator unit tests; config aligned to `PK`/`SK` + users mapping; pending integrated build/test run |
-| 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + expanded endpoint tests + expanded service unit tests (family-scope/index-filter/not-found paths); pending integrated runtime verification |
-| 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend touchpoints + ProblemDetails-aware error messaging + expanded page-level and API-client auth/retry behavior tests; pending integrated frontend test run |
+| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | Done | Profile endpoints + validators + tests completed; integrated backend tests green on `main` |
+| 2.4 | CRUD `/api/family/dependents` | Codespaces | Done | Dependent CRUD endpoints + validators + service/endpoint tests completed; integrated backend tests green on `main` |
+| 2.5 | Profile UI and API integration | Codespaces | Done | Profile UI/API integration + frontend error handling/tests completed; lint/build/tests green on `main` |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Done | User-confirmed records migrated successfully; FamilyIndex validation (`FAM#tomlin`) returned 4 records; users table count = 4 |
-| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 + 400 ValidationProblem contract assertions + auth-claim resolver and ProblemDetails helper contract unit coverage; pending integrated test run |
+| 2.7 | Family-scoped authorization enforcement | Codespaces | Done | Family-scoped service guardrails + ProblemDetails/validation contract assertions + auth-context tests completed; integrated backend tests green on `main` |
 | 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
 
 ## Milestone Criteria Tracking

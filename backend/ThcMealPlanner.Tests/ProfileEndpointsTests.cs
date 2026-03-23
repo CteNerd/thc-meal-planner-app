@@ -150,7 +150,7 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
         problem.Errors.Should().NotBeNull();
         problem.Errors!.Should().ContainKey("Role");
         problem.Errors["Role"].Should().ContainSingle();
-        problem.Errors["Role"][0].Should().Contain("Role cannot be updated", StringComparison.Ordinal);
+        problem.Errors["Role"][0].Should().Contain("Role cannot be updated");
     }
 
     [Fact]
