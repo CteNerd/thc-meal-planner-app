@@ -15,19 +15,13 @@ Use two coordinated lanes to increase throughput while avoiding overlap:
 
 Branching strategy for all remaining phases:
 
-1. Create short-lived task branches from `main` using owner + phase prefixes:
-  - `mac/p2-1-datastack`
-  - `cs/p2-2-dynamodb-repository`
-2. Open PRs early with draft status; include labels `phase:X` and `lane:mac` or `lane:codespaces`.
-3. Rebase task branches on `main` before requesting review.
-4. Merge smallest safe increments first (infrastructure contracts before dependent app code).
-5. Reserve a phase integration branch only when needed for coordinated testing (example: `phase2/integration`).
+Both Mac Mini and Codespaces work directly on `main`. No feature branches or PRs — resolve conflicts in the IDE. Push after each subphase or logical commit unit to stay in sync.
 
 Sync policy for both lanes:
 
-- Check in at least once per day and after every merged PR.
+- Check in after each subphase or commit, and at least daily.
 - Update the current phase checklist with status, owner, and blockers.
-- Announce any contract changes (API shape, table keys/indexes, env vars) before merge.
+- Announce any contract changes (API shape, table keys/indexes, env vars) before pushing.
 
 ---
 

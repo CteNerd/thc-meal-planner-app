@@ -10,21 +10,9 @@ Use this packet to start Codespaces work immediately while Mac Mini handles depl
 - 2.5 Profile UI and API wiring
 - 2.7 Family-scoped authorization enforcement + tests
 
-## Branch Plan
+## Working Policy
 
-Create short-lived branches from `main`:
-
-1. `cs/p2-2-dynamodb-data-layer`
-2. `cs/p2-3-profile-api`
-3. `cs/p2-4-dependents-api`
-4. `cs/p2-5-profile-ui`
-5. `cs/p2-7-family-scope-authz`
-
-Use draft PRs early and add labels:
-
-- `phase:2`
-- `lane:codespaces`
-- `area:backend`, `area:frontend`, or `area:infra`
+Work directly on `main`. No feature branches or PRs. Resolve any merge conflicts within the IDE. Push to `main` after each subphase or logical commit unit so Mac Mini and Codespaces stay in sync.
 
 ## Current Contracts (From Mac Lane)
 
