@@ -24,5 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ThcMealPlanner.Api\ThcMealPlanner.Api.csproj" />
+    <ProjectReference Include="..\ThcMealPlanner.Core\ThcMealPlanner.Core.csproj" />
+    <ProjectReference Include="..\ThcMealPlanner.Infrastructure\ThcMealPlanner.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

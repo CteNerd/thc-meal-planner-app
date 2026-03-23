@@ -1,11 +1,16 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
+using ThcMealPlanner.Api.Profiles;
+using ThcMealPlanner.Infrastructure;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 builder.Services.AddCognitoAuthentication(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IValidator<UpdateProfileRequest>, UpdateProfileRequestValidator>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -38,6 +43,8 @@ authenticatedApi.MapGet("/session", (HttpContext httpContext) =>
         authenticated = user.Identity?.IsAuthenticated ?? false
     });
 });
+
+authenticatedApi.MapProfileEndpoints();
 
 app.Run();
 
