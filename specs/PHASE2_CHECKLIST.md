@@ -47,15 +47,16 @@ Check-in template:
 - Lane: Mac Mini
 - Task: 2.1
 - Branch: `mac/p2-1-datastack`
-- Status: In Progress
+- Status: Done
 - Contracts touched: DynamoDB GSIs (`FamilyIndex`, `StatusIndex`, `CategoryIndex`, `CuisineIndex`)
-- Blockers or handoff requests: Codespaces lane can begin 2.2 using these index names as current contract.
+- Blockers or handoff requests: None. Codespaces lane can begin 2.2 using these index names as active contract.
+- Evidence: CloudFormation `ThcMealPlanner-dev-Data` is `UPDATE_COMPLETE`; tables present (`users`, `mealplans`, `recipes`, `favorites`, `grocerylists`, `chathistory`); GSIs active (`FamilyIndex`, `StatusIndex`, `CategoryIndex`, `CuisineIndex`); TTL enabled on `mealplans` + `chathistory` with attribute `TTL`.
 
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
 |---|---|---|---|---|
-| 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | In Progress | CDK updated with Users `FamilyIndex`, MealPlans `StatusIndex`, Recipes `CategoryIndex` + `CuisineIndex`; `npm run build` + `npm run synth` pass |
+| 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); deployed from `mac/p2-1-datastack`; PR #1 |
 | 2.2 | Build DynamoDB data access layer | Codespaces | Not Started | |
 | 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | Not Started | |
 | 2.4 | CRUD `/api/family/dependents` | Codespaces | Not Started | |
