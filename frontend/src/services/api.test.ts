@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { ApiError, getApiErrorMessage } from './api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ApiError, apiFetch, configureApiClient, getApiErrorMessage } from './api';
 
 describe('getApiErrorMessage', () => {
   it('returns detail when available', () => {
@@ -40,5 +40,81 @@ describe('getApiErrorMessage', () => {
     const message = getApiErrorMessage(new Error('boom'), 'fallback');
 
     expect(message).toBe('fallback');
+  });
+});
+
+describe('apiFetch', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    configureApiClient({
+      getAccessToken: () => null,
+      refreshSession: async () => undefined,
+      onUnauthorized: async () => undefined
+    });
+  });
+
+  it('retries once after 401 when token refresh succeeds', async () => {
+    const getAccessToken = vi.fn<() => string | null>()
+      .mockReturnValueOnce('expired-token')
+      .mockReturnValue('fresh-token');
+    const refreshSession = vi.fn().mockResolvedValue(undefined);
+    const onUnauthorized = vi.fn().mockResolvedValue(undefined);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ getAccessToken, refreshSession, onUnauthorized });
+
+    const response = await apiFetch('/profile');
+
+    expect(response.status).toBe(200);
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const secondCallOptions = fetchMock.mock.calls[1][1] as RequestInit;
+    const headers = new Headers(secondCallOptions.headers);
+    expect(headers.get('Authorization')).toBe('Bearer fresh-token');
+  });
+
+  it('calls onUnauthorized when refresh does not produce a token', async () => {
+    const getAccessToken = vi.fn<() => string | null>()
+      .mockReturnValueOnce('expired-token')
+      .mockReturnValue(null);
+    const refreshSession = vi.fn().mockResolvedValue(undefined);
+    const onUnauthorized = vi.fn().mockResolvedValue(undefined);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ getAccessToken, refreshSession, onUnauthorized });
+
+    const response = await apiFetch('/profile');
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onUnauthorized when retried request is still unauthorized', async () => {
+    const getAccessToken = vi.fn<() => string | null>()
+      .mockReturnValueOnce('expired-token')
+      .mockReturnValue('fresh-token');
+    const refreshSession = vi.fn().mockResolvedValue(undefined);
+    const onUnauthorized = vi.fn().mockResolvedValue(undefined);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ getAccessToken, refreshSession, onUnauthorized });
+
+    const response = await apiFetch('/profile');
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 });
