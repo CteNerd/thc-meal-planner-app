@@ -111,6 +111,7 @@ thc-meal-planner-app/
 | [PHASE1_CHECKLIST.md](PHASE1_CHECKLIST.md) | Living checklist and backlog plan for Phase 1 foundation work |
 | [PHASE2_CHECKLIST.md](PHASE2_CHECKLIST.md) | Living checklist for Phase 2 data layer/profile work across parallel lanes |
 | [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md) | Codespaces execution packet for Phase 2 parallel delivery |
+| [PHASE3_CHECKLIST.md](PHASE3_CHECKLIST.md) | Living checklist for Phase 3 cookbook/recipe work across Codespaces and Mac Mini lanes |
 | [COOKBOOK_SPEC.md](COOKBOOK_SPEC.md) | Recipe management, URL import, image upload, favorites |
 | [TESTING_SPEC.md](TESTING_SPEC.md) | Testing pyramid, 80% coverage, tools, CI gates |
 
