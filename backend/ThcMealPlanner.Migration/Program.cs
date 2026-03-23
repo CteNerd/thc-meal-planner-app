@@ -1,7 +1,6 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 var arguments = MigrationArguments.Parse(args);
 
@@ -69,15 +68,27 @@ foreach (var profile in profiles)
 
 Console.WriteLine("Profile migration completed successfully.");
 
-static async Task<List<UserProfileSeed>> LoadProfilesAsync(string filePath)
+static async Task<List<SeedProfileRecord>> LoadProfilesAsync(string filePath)
 {
     await using var stream = File.OpenRead(filePath);
-    var profiles = await JsonSerializer.DeserializeAsync<List<UserProfileSeed>>(stream, JsonOptions.Default);
+    using var document = await JsonDocument.ParseAsync(stream);
 
-    return profiles ?? [];
+    if (document.RootElement.ValueKind is not JsonValueKind.Array)
+    {
+        throw new InvalidOperationException("Users seed file must contain a top-level JSON array.");
+    }
+
+    var profiles = new List<SeedProfileRecord>();
+
+    foreach (var element in document.RootElement.EnumerateArray())
+    {
+        profiles.Add(SeedProfileRecord.FromJson(element));
+    }
+
+    return profiles;
 }
 
-static List<string> ValidateProfiles(IReadOnlyList<UserProfileSeed> profiles)
+static List<string> ValidateProfiles(IReadOnlyList<SeedProfileRecord> profiles)
 {
     var errors = new List<string>();
 
@@ -99,18 +110,6 @@ static List<string> ValidateProfiles(IReadOnlyList<UserProfileSeed> profiles)
         errors.Add($"Expected 2 dependent profiles but found {dependents.Count}.");
     }
 
-    var severeAllergyAdults = adults.Where(HasSevereAllergy).ToList();
-    if (severeAllergyAdults.Count != 1)
-    {
-        errors.Add($"Expected exactly 1 adult profile with a severe allergy but found {severeAllergyAdults.Count}.");
-    }
-
-    var noSevereAllergyAdults = adults.Where(profile => !HasSevereAllergy(profile)).ToList();
-    if (noSevereAllergyAdults.Count != 1)
-    {
-        errors.Add($"Expected exactly 1 adult profile without severe allergies but found {noSevereAllergyAdults.Count}.");
-    }
-
     foreach (var profile in profiles)
     {
         if (string.IsNullOrWhiteSpace(profile.Pk))
@@ -127,38 +126,70 @@ static List<string> ValidateProfiles(IReadOnlyList<UserProfileSeed> profiles)
         {
             errors.Add($"Profile '{profile.Name}' is missing familyId.");
         }
+
+        if (!string.Equals(profile.Sk, "PROFILE", StringComparison.Ordinal))
+        {
+            errors.Add($"Profile '{profile.Name}' must use SK='PROFILE'.");
+        }
+
+        if (!profile.Pk.StartsWith("USER#", StringComparison.Ordinal))
+        {
+            errors.Add($"Profile '{profile.Name}' must use PK starting with 'USER#'.");
+        }
+
+        var userId = profile.GetOptionalString("userId");
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            errors.Add($"Profile '{profile.Name}' is missing userId.");
+        }
+        else
+        {
+            var expectedPk = $"USER#{userId}";
+            if (!string.Equals(profile.Pk, expectedPk, StringComparison.Ordinal))
+            {
+                errors.Add($"Profile '{profile.Name}' PK '{profile.Pk}' does not match userId '{userId}' (expected '{expectedPk}').");
+            }
+        }
+    }
+
+    var distinctFamilyIds = profiles.Select(profile => profile.FamilyId).Distinct(StringComparer.Ordinal).Count();
+    if (distinctFamilyIds != 1)
+    {
+        errors.Add("All profile records must use the same familyId.");
+    }
+
+    var duplicateNames = profiles
+        .GroupBy(profile => profile.Name, StringComparer.OrdinalIgnoreCase)
+        .Where(group => group.Count() > 1)
+        .Select(group => group.Key)
+        .ToList();
+
+    if (duplicateNames.Count > 0)
+    {
+        errors.Add($"Duplicate profile names are not allowed: {string.Join(", ", duplicateNames)}.");
     }
 
     return errors;
 }
 
-static bool HasSevereAllergy(UserProfileSeed profile)
+static Dictionary<string, AttributeValue> BuildItem(SeedProfileRecord profile)
 {
-    return profile.Allergies.Any(allergy =>
-        string.Equals(allergy.Severity, "severe", StringComparison.OrdinalIgnoreCase));
-}
-
-static Dictionary<string, AttributeValue> BuildItem(UserProfileSeed profile)
-{
-    var json = JsonSerializer.Serialize(profile, JsonOptions.Default);
-    var dictionary = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonOptions.Default)
-        ?? throw new InvalidOperationException("Failed to serialize profile seed.");
-
     var item = new Dictionary<string, AttributeValue>(StringComparer.Ordinal)
     {
         ["PK"] = new AttributeValue { S = profile.Pk },
         ["SK"] = new AttributeValue { S = profile.Sk }
     };
 
-    foreach (var (key, value) in dictionary)
+    foreach (var property in profile.Raw.EnumerateObject())
     {
-        if (string.Equals(key, "pk", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(key, "sk", StringComparison.OrdinalIgnoreCase))
+        if (property.NameEquals("PK") || property.NameEquals("SK") ||
+            string.Equals(property.Name, "pk", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(property.Name, "sk", StringComparison.OrdinalIgnoreCase))
         {
             continue;
         }
 
-        item[key] = ToAttributeValue(value);
+        item[property.Name] = ToAttributeValue(property.Value);
     }
 
     return item;
@@ -168,7 +199,7 @@ static AttributeValue ToAttributeValue(JsonElement element)
 {
     return element.ValueKind switch
     {
-        JsonValueKind.String => new AttributeValue { S = element.GetString() },
+        JsonValueKind.String => new AttributeValue { S = element.GetString() ?? string.Empty },
         JsonValueKind.Number => new AttributeValue { N = element.GetRawText() },
         JsonValueKind.True => new AttributeValue { BOOL = true },
         JsonValueKind.False => new AttributeValue { BOOL = false },
@@ -239,7 +270,7 @@ internal sealed record MigrationArguments
         Console.WriteLine("Usage: dotnet run --project backend/ThcMealPlanner.Migration -- [options]");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  --users-file <path>  Path to Users.json seed data (default: ../.local/seed-data/Users.json)");
+        Console.WriteLine("  --users-file <path>  Path to Users.json seed data (default: .local/seed-data/Users.json)");
         Console.WriteLine("  --table-name <name>  DynamoDB users table name (default: thc-meal-planner-dev-users)");
         Console.WriteLine("  --region <region>    AWS region (default: us-east-1)");
         Console.WriteLine("  --dry-run            Validate and preview writes only (default)");
@@ -257,40 +288,54 @@ internal sealed record MigrationArguments
     }
 }
 
-internal sealed record UserProfileSeed
+internal sealed record SeedProfileRecord(
+    string Pk,
+    string Sk,
+    string Name,
+    string Role,
+    string FamilyId,
+    JsonElement Raw)
 {
-    [JsonPropertyName("PK")]
-    public string Pk { get; init; } = string.Empty;
-
-    [JsonPropertyName("SK")]
-    public string Sk { get; init; } = string.Empty;
-
-    [JsonPropertyName("name")]
-    public string Name { get; init; } = string.Empty;
-
-    [JsonPropertyName("role")]
-    public string Role { get; init; } = "member";
-
-    [JsonPropertyName("familyId")]
-    public string FamilyId { get; init; } = string.Empty;
-
-    [JsonPropertyName("allergies")]
-    public List<AllergySeed> Allergies { get; init; } = [];
-}
-
-internal sealed record AllergySeed
-{
-    [JsonPropertyName("allergen")]
-    public string Allergen { get; init; } = string.Empty;
-
-    [JsonPropertyName("severity")]
-    public string Severity { get; init; } = string.Empty;
-}
-
-internal static class JsonOptions
-{
-    public static readonly JsonSerializerOptions Default = new(JsonSerializerDefaults.Web)
+    public static SeedProfileRecord FromJson(JsonElement element)
     {
-        PropertyNameCaseInsensitive = true
-    };
+        var raw = element.Clone();
+
+        return new SeedProfileRecord(
+            GetOptionalString(raw, "PK"),
+            GetOptionalString(raw, "SK"),
+            GetOptionalString(raw, "name"),
+            GetOptionalString(raw, "role"),
+            GetOptionalString(raw, "familyId"),
+            raw);
+    }
+
+    public string GetOptionalString(string propertyName)
+    {
+        return GetOptionalString(Raw, propertyName);
+    }
+
+    private static string GetOptionalString(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind is not JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (property.Value.ValueKind == JsonValueKind.String)
+            {
+                return property.Value.GetString() ?? string.Empty;
+            }
+
+            return property.Value.GetRawText();
+        }
+
+        return string.Empty;
+    }
 }

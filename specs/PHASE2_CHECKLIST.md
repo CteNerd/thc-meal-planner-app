@@ -68,6 +68,14 @@ Check-in template:
 - Contracts touched: Added migration console scaffold (`backend/ThcMealPlanner.Migration`) with dry-run/execute modes and users-table write path (`PK`/`SK` keys to `thc-meal-planner-dev-users`)
 - Blockers or handoff requests: Awaiting explicit user confirmation of the 4 profile records before committing/running migration payload writes.
 
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.6 migration dry-run
+- Status: In Progress
+- Contracts touched: Finalized local profile payload in `.local/seed-data/Users.json` using `PK=USER#{userId}` + `SK=PROFILE` for both adults and dependents; verified 4-record dry-run against `thc-meal-planner-dev-users`.
+- Blockers or handoff requests: Awaiting explicit approval for live migration writes (`--execute`).
+
 ### 2026-03-23 - Codespaces lane
 
 - Lane: Codespaces
