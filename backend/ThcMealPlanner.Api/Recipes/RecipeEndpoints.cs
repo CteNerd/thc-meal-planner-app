@@ -7,6 +7,8 @@ public static class RecipeEndpoints
 {
     public static RouteGroupBuilder MapRecipeEndpoints(this RouteGroupBuilder group)
     {
+        group.MapPost("/recipes/import-from-url", ImportRecipeFromUrlAsync);
+        group.MapPost("/recipes/{recipeId}/upload-url", CreateUploadUrlAsync);
         group.MapGet("/recipes/favorites", ListFavoritesAsync);
         group.MapPost("/recipes/{recipeId}/favorite", AddFavoriteAsync);
         group.MapDelete("/recipes/{recipeId}/favorite", RemoveFavoriteAsync);
@@ -18,6 +20,87 @@ public static class RecipeEndpoints
         group.MapDelete("/recipes/{recipeId}", DeleteRecipeAsync);
 
         return group;
+    }
+
+    private static async Task<IResult> ImportRecipeFromUrlAsync(
+        HttpContext httpContext,
+        ImportRecipeFromUrlRequest request,
+        IValidator<ImportRecipeFromUrlRequest> validator,
+        IRecipeImportService recipeImportService,
+        CancellationToken cancellationToken)
+    {
+        var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
+        if (userContext is null)
+        {
+            return RecipeProblemDetails.MissingRequiredUserClaims();
+        }
+
+        var validationResult = await validator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        try
+        {
+            var draft = await recipeImportService.ImportFromUrlAsync(request.Url, cancellationToken);
+            return Results.Ok(draft);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Recipe import failed",
+                detail: exception.Message);
+        }
+        catch (HttpRequestException exception)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Recipe import failed",
+                detail: exception.Message);
+        }
+    }
+
+    private static async Task<IResult> CreateUploadUrlAsync(
+        HttpContext httpContext,
+        string recipeId,
+        CreateRecipeUploadUrlRequest request,
+        IValidator<CreateRecipeUploadUrlRequest> validator,
+        IRecipeService recipeService,
+        IRecipeImageUploadService recipeImageUploadService,
+        CancellationToken cancellationToken)
+    {
+        var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
+        if (userContext is null)
+        {
+            return RecipeProblemDetails.MissingRequiredUserClaims();
+        }
+
+        var validationResult = await validator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        var recipe = await recipeService.GetByIdAsync(userContext.FamilyId, recipeId, cancellationToken);
+        if (recipe is null)
+        {
+            return RecipeProblemDetails.RecipeNotFound();
+        }
+
+        try
+        {
+            var response = await recipeImageUploadService.CreateUploadUrlAsync(recipeId, request, cancellationToken);
+            return Results.Ok(response);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Image upload unavailable",
+                detail: exception.Message);
+        }
     }
 
     private static async Task<IResult> ListRecipesAsync(

@@ -39,6 +39,19 @@ public sealed class CreateRecipeRequestValidator : AbstractValidator<CreateRecip
             .MaximumLength(300)
             .When(x => x.ImageKey is not null);
 
+        RuleFor(x => x.ThumbnailKey)
+            .MaximumLength(300)
+            .When(x => x.ThumbnailKey is not null);
+
+        RuleFor(x => x.SourceType)
+            .Must(IsKnownSourceType)
+            .WithMessage("Source type must be one of: manual, url, image_upload.")
+            .When(x => x.SourceType is not null);
+
+        RuleFor(x => x.SourceUrl)
+            .MaximumLength(2048)
+            .When(x => x.SourceUrl is not null);
+
         RuleFor(x => x.Variations)
             .MaximumLength(2000)
             .When(x => x.Variations is not null);
@@ -89,6 +102,11 @@ public sealed class CreateRecipeRequestValidator : AbstractValidator<CreateRecip
     {
         return RecipeCategories.All.Contains(category);
     }
+
+    private static bool IsKnownSourceType(string sourceType)
+    {
+        return RecipeSourceTypes.All.Contains(sourceType);
+    }
 }
 
 public sealed class UpdateRecipeRequestValidator : AbstractValidator<UpdateRecipeRequest>
@@ -127,6 +145,19 @@ public sealed class UpdateRecipeRequestValidator : AbstractValidator<UpdateRecip
         RuleFor(x => x.ImageKey)
             .MaximumLength(300)
             .When(x => x.ImageKey is not null);
+
+        RuleFor(x => x.ThumbnailKey)
+            .MaximumLength(300)
+            .When(x => x.ThumbnailKey is not null);
+
+        RuleFor(x => x.SourceType)
+            .Must(IsKnownSourceType)
+            .WithMessage("Source type must be one of: manual, url, image_upload.")
+            .When(x => x.SourceType is not null);
+
+        RuleFor(x => x.SourceUrl)
+            .MaximumLength(2048)
+            .When(x => x.SourceUrl is not null);
 
         RuleFor(x => x.Variations)
             .MaximumLength(2000)
@@ -176,6 +207,11 @@ public sealed class UpdateRecipeRequestValidator : AbstractValidator<UpdateRecip
     {
         return RecipeCategories.All.Contains(category);
     }
+
+    private static bool IsKnownSourceType(string sourceType)
+    {
+        return RecipeSourceTypes.All.Contains(sourceType);
+    }
 }
 
 public sealed class FavoriteRecipeRequestValidator : AbstractValidator<FavoriteRecipeRequest>
@@ -189,6 +225,33 @@ public sealed class FavoriteRecipeRequestValidator : AbstractValidator<FavoriteR
         RuleFor(x => x.PortionOverride)
             .GreaterThan(0)
             .When(x => x.PortionOverride.HasValue);
+    }
+}
+
+public sealed class ImportRecipeFromUrlRequestValidator : AbstractValidator<ImportRecipeFromUrlRequest>
+{
+    public ImportRecipeFromUrlRequestValidator()
+    {
+        RuleFor(x => x.Url)
+            .NotEmpty()
+            .MaximumLength(2048)
+            .Must(url => Uri.TryCreate(url, UriKind.Absolute, out _))
+            .WithMessage("Url must be a valid absolute URL.");
+    }
+}
+
+public sealed class CreateRecipeUploadUrlRequestValidator : AbstractValidator<CreateRecipeUploadUrlRequest>
+{
+    public CreateRecipeUploadUrlRequestValidator()
+    {
+        RuleFor(x => x.FileName)
+            .NotEmpty()
+            .MaximumLength(255);
+
+        RuleFor(x => x.ContentType)
+            .NotEmpty()
+            .Must(contentType => RecipeImageContentTypes.All.Contains(contentType))
+            .WithMessage("Content type must be image/jpeg, image/png, or image/webp.");
     }
 }
 
@@ -240,5 +303,25 @@ internal static class RecipeCategories
         "lunch",
         "dinner",
         "snack"
+    };
+}
+
+internal static class RecipeSourceTypes
+{
+    public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "manual",
+        "url",
+        "image_upload"
+    };
+}
+
+internal static class RecipeImageContentTypes
+{
+    public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp"
     };
 }

@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.506.4" />
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.302" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.412.3" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
     <ProjectReference Include="..\ThcMealPlanner.Core\ThcMealPlanner.Core.csproj" />
   </ItemGroup>

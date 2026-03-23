@@ -1,0 +1,97 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { RecipeDetailPage } from './RecipeDetailPage';
+import type { FavoriteRecipe, Recipe } from '../types';
+import { addFavoriteRecipe, getRecipe, listFavoriteRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+
+vi.mock('../services/recipeApi', () => ({
+  getRecipe: vi.fn(),
+  listFavoriteRecipes: vi.fn(),
+  addFavoriteRecipe: vi.fn(),
+  removeFavoriteRecipe: vi.fn()
+}));
+
+const mockedGetRecipe = vi.mocked(getRecipe);
+const mockedListFavoriteRecipes = vi.mocked(listFavoriteRecipes);
+const mockedAddFavoriteRecipe = vi.mocked(addFavoriteRecipe);
+const mockedRemoveFavoriteRecipe = vi.mocked(removeFavoriteRecipe);
+
+function buildRecipe(overrides?: Partial<Recipe>): Recipe {
+  return {
+    recipeId: 'rec_1',
+    familyId: 'FAM#test-family',
+    name: 'Veggie Stir Fry',
+    category: 'dinner',
+    tags: ['quick'],
+    ingredients: [{ name: 'Broccoli' }],
+    instructions: ['Stir fry all ingredients.'],
+    sourceType: 'manual',
+    createdByUserId: 'test-user-123',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function buildFavorite(overrides?: Partial<FavoriteRecipe>): FavoriteRecipe {
+  return {
+    userId: 'test-user-123',
+    recipeId: 'rec_1',
+    recipeName: 'Veggie Stir Fry',
+    recipeCategory: 'dinner',
+    addedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+describe('RecipeDetailPage', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('loads and renders recipe details', async () => {
+    mockedGetRecipe.mockResolvedValue(buildRecipe({ description: 'Fast and easy.' }));
+    mockedListFavoriteRecipes.mockResolvedValue([buildFavorite()]);
+
+    render(
+      <MemoryRouter initialEntries={['/cookbook/rec_1']}>
+        <Routes>
+          <Route path="/cookbook/:recipeId" element={<RecipeDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Veggie Stir Fry')).toBeInTheDocument();
+    expect(screen.getByText('Fast and easy.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Favorited' })).toBeInTheDocument();
+  });
+
+  it('toggles favorite state', async () => {
+    mockedGetRecipe.mockResolvedValue(buildRecipe());
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+    mockedAddFavoriteRecipe.mockResolvedValue(buildFavorite());
+    mockedRemoveFavoriteRecipe.mockResolvedValue();
+
+    render(
+      <MemoryRouter initialEntries={['/cookbook/rec_1']}>
+        <Routes>
+          <Route path="/cookbook/:recipeId" element={<RecipeDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Veggie Stir Fry');
+    fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }));
+
+    await waitFor(() => {
+      expect(mockedAddFavoriteRecipe).toHaveBeenCalledWith('rec_1', {});
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Favorited' }));
+
+    await waitFor(() => {
+      expect(mockedRemoveFavoriteRecipe).toHaveBeenCalledWith('rec_1');
+    });
+  });
+}

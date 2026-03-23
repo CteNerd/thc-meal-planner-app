@@ -1,5 +1,6 @@
 import { Card } from '../components/ui/Card';
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../services/api';
 import { addFavoriteRecipe, listFavoriteRecipes, listRecipes, removeFavoriteRecipe } from '../services/recipeApi';
 import type { Recipe } from '../types';
@@ -11,6 +12,7 @@ export function CookbookPage() {
   const [favoriteRecipeIds, setFavoriteRecipeIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +67,10 @@ export function CookbookPage() {
         return false;
       }
 
+      if (favoritesOnly && !favoriteRecipeIds.has(recipe.recipeId)) {
+        return false;
+      }
+
       if (!normalizedSearch) {
         return true;
       }
@@ -80,7 +86,7 @@ export function CookbookPage() {
 
       return searchableFields.includes(normalizedSearch);
     });
-  }, [categoryFilter, recipes, searchQuery]);
+  }, [categoryFilter, favoriteRecipeIds, favoritesOnly, recipes, searchQuery]);
 
   async function toggleFavorite(recipeId: string) {
     try {
@@ -108,8 +114,15 @@ export function CookbookPage() {
 
   return (
     <Card>
-      <h2 className="text-2xl font-semibold text-slate-900">Cookbook</h2>
-      <p className="mt-3 text-sm text-slate-600">Browse family recipes, search quickly, and save favorites for future planning.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-slate-900">Cookbook</h2>
+          <p className="mt-3 text-sm text-slate-600">Browse family recipes, search quickly, and save favorites for future planning.</p>
+        </div>
+        <Link to="/cookbook/new">
+          <Button type="button">Add recipe</Button>
+        </Link>
+      </div>
 
       {isLoading ? (
         <p className="mt-4 text-sm text-slate-600">Loading recipes...</p>
@@ -136,6 +149,12 @@ export function CookbookPage() {
             </select>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant={favoritesOnly ? 'secondary' : 'ghost'} onClick={() => setFavoritesOnly((current) => !current)}>
+              {favoritesOnly ? 'Showing favorites' : 'Favorites only'}
+            </Button>
+          </div>
+
           {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
           {filteredRecipes.length === 0 ? (
@@ -150,7 +169,9 @@ export function CookbookPage() {
                   <li key={recipe.recipeId} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="text-base font-semibold text-slate-900">{recipe.name}</h3>
+                        <Link to={`/cookbook/${recipe.recipeId}`} className="text-base font-semibold text-slate-900 underline-offset-4 hover:underline">
+                          {recipe.name}
+                        </Link>
                         <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{recipe.category}</p>
                       </div>
                       <Button
@@ -180,6 +201,12 @@ export function CookbookPage() {
                         ))}
                       </div>
                     ) : null}
+
+                    <div className="mt-4 flex justify-end">
+                      <Link to={`/cookbook/${recipe.recipeId}`} className="text-sm font-semibold text-sky-700 underline underline-offset-4">
+                        View recipe
+                      </Link>
+                    </div>
                   </li>
                 );
               })}

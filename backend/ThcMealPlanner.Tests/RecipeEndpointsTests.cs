@@ -210,6 +210,63 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
+    public async Task PostImportFromUrl_ReturnsDraftRecipe()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/recipes/import-from-url",
+            new ImportRecipeFromUrlRequest
+            {
+                Url = "https://example.com/recipe"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var draft = await response.Content.ReadFromJsonAsync<ImportedRecipeDraft>();
+        draft.Should().NotBeNull();
+        draft!.Name.Should().Be("Imported Draft");
+        draft.SourceType.Should().Be("url");
+    }
+
+    [Fact]
+    public async Task PostUploadUrl_WhenRecipeExists_ReturnsPresignedUrlPayload()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#test-family", "RECIPE#rec_upload"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_upload",
+                FamilyId = "FAM#test-family",
+                Name = "Upload Recipe",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "test-user-123",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/recipes/rec_upload/upload-url",
+            new CreateRecipeUploadUrlRequest
+            {
+                FileName = "dish.jpg",
+                ContentType = "image/jpeg"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<RecipeUploadUrlResponse>();
+        payload.Should().NotBeNull();
+        payload!.ImageKey.Should().Be("recipes/rec_upload/test.jpg");
+    }
+
+    [Fact]
     public async Task GetRecipes_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
     {
         var recipeRepository = new InMemoryRecipeRepository();
@@ -242,9 +299,13 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 services.AddScoped<IRecipeService>(_ => new RecipeService(recipeRepository, favoriteRepository));
                 services.AddSingleton<IDynamoDbRepository<RecipeDocument>>(recipeRepository);
                 services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
+                services.AddScoped<IRecipeImportService, FakeRecipeImportService>();
+                services.AddScoped<IRecipeImageUploadService, FakeRecipeImageUploadService>();
                 services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
                 services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
                 services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
+                services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
+                services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
             });
         }).CreateClient();
     }
@@ -265,11 +326,47 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 services.AddScoped<IRecipeService>(_ => new RecipeService(recipeRepository, favoriteRepository));
                 services.AddSingleton<IDynamoDbRepository<RecipeDocument>>(recipeRepository);
                 services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
+                services.AddScoped<IRecipeImportService, FakeRecipeImportService>();
+                services.AddScoped<IRecipeImageUploadService, FakeRecipeImageUploadService>();
                 services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
                 services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
                 services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
+                services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
+                services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
             });
         }).CreateClient();
+    }
+
+    private sealed class FakeRecipeImportService : IRecipeImportService
+    {
+        public Task<ImportedRecipeDraft> ImportFromUrlAsync(string url, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ImportedRecipeDraft
+            {
+                Name = "Imported Draft",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Imported ingredient" }],
+                Instructions = ["Imported step"],
+                SourceType = "url",
+                SourceUrl = url
+            });
+        }
+    }
+
+    private sealed class FakeRecipeImageUploadService : IRecipeImageUploadService
+    {
+        public Task<RecipeUploadUrlResponse> CreateUploadUrlAsync(
+            string recipeId,
+            CreateRecipeUploadUrlRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new RecipeUploadUrlResponse
+            {
+                UploadUrl = "https://example.com/upload",
+                ImageKey = $"recipes/{recipeId}/test.jpg",
+                ImageUrl = $"/images/recipes/{recipeId}/test.jpg"
+            });
+        }
     }
 
     private sealed class InMemoryRecipeRepository : IDynamoDbRepository<RecipeDocument>

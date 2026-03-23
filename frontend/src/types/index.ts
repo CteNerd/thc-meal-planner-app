@@ -123,11 +123,60 @@ export type Recipe = {
   instructions: string[];
   nutrition?: RecipeNutrition;
   imageKey?: string;
+  thumbnailKey?: string;
+  sourceType: string;
+  sourceUrl?: string;
   variations?: string;
   storageInfo?: string;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RecipePayload = {
+  name: string;
+  description?: string;
+  category: string;
+  cuisine?: string;
+  servings?: number;
+  prepTimeMinutes?: number;
+  cookTimeMinutes?: number;
+  proteinSource?: string;
+  cookingMethod?: string;
+  difficulty?: string;
+  tags: string[];
+  ingredients: RecipeIngredient[];
+  instructions: string[];
+  nutrition?: RecipeNutrition;
+  imageKey?: string;
+  thumbnailKey?: string;
+  sourceType?: string;
+  sourceUrl?: string;
+  variations?: string;
+  storageInfo?: string;
+};
+
+export type UpdateRecipePayload = Partial<RecipePayload>;
+
+export type ImportedRecipeDraft = RecipePayload & {
+  sourceType: string;
+  sourceUrl: string;
+  warnings: string[];
+};
+
+export type ImportRecipeFromUrlPayload = {
+  url: string;
+};
+
+export type CreateRecipeUploadUrlPayload = {
+  fileName: string;
+  contentType: string;
+};
+
+export type RecipeUploadUrlResponse = {
+  uploadUrl: string;
+  imageKey: string;
+  imageUrl: string;
 };
 
 export type FavoriteRecipe = {

@@ -13,12 +13,16 @@ builder.Services.AddCognitoAuthentication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
+builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>();
+builder.Services.AddScoped<IRecipeImageUploadService, RecipeImageUploadService>();
 builder.Services.AddScoped<IValidator<UpdateProfileRequest>, UpdateProfileRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateDependentRequest>, CreateDependentRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateDependentRequest>, UpdateDependentRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
 builder.Services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
+builder.Services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
+builder.Services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();

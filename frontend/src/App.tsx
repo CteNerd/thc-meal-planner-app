@@ -8,6 +8,8 @@ import { GroceryListPage } from './pages/GroceryListPage';
 import { LoginPage } from './pages/LoginPage';
 import { MealPlansPage } from './pages/MealPlansPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { RecipeDetailPage } from './pages/RecipeDetailPage';
+import { RecipeEditorPage } from './pages/RecipeEditorPage';
 
 function App() {
   return (
@@ -39,6 +41,36 @@ function App() {
           <RequireAuth>
             <AppShell>
               <CookbookPage />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/cookbook/new"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <RecipeEditorPage />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/cookbook/:recipeId"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <RecipeDetailPage />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/cookbook/:recipeId/edit"
+        element={
+          <RequireAuth>
+            <AppShell>
+              <RecipeEditorPage />
             </AppShell>
           </RequireAuth>
         }
