@@ -7,36 +7,21 @@ Living tracker for data layer and profile work with explicit parallel ownership 
 - **Mac Mini lane**: AWS deploys, environment verification, migration execution.
 - **Codespaces lane**: backend/frontend feature code, tests, and PR preparation.
 
-## Branching Strategy (Phase 2)
+## Working Policy
 
-1. Start every task from `main`.
-2. Use owner-prefixed branch names:
-   - `mac/p2-1-datastack`
-   - `mac/p2-6-profile-migration`
-   - `mac/p2-8-secrets-stack`
-   - `cs/p2-2-dynamodb-data-layer`
-   - `cs/p2-3-profile-api`
-   - `cs/p2-4-dependents-api`
-   - `cs/p2-5-profile-ui`
-   - `cs/p2-7-family-scope-authz`
-3. Open draft PRs as soon as the contract is stable.
-4. Use labels on PRs/issues:
-   - `phase:2`
-   - `lane:mac` or `lane:codespaces`
-   - `area:backend`, `area:frontend`, or `area:infra`
-5. Rebase from `main` before merge.
-6. Use `phase2/integration` only when coordinated cross-lane validation is needed.
+Both Mac Mini and Codespaces work directly on `main`. No feature branches or PRs. Resolve any conflicts within the IDE.
+
+Check in after each subphase or logical commit unit — push to `main` promptly so the two environments stay in sync.
 
 ## Check-In Protocol (Both Brains)
 
-Update this file at least daily and after each merged PR.
+Update this file after each subphase commit and at least daily.
 
 Check-in template:
 
 - Lane: Mac Mini or Codespaces
 - Task: Milestone item number(s)
-- Branch: branch name
-- Status: In Progress / Blocked / Ready for Review / Done
+- Status: In Progress / Blocked / Done
 - Contracts touched: API routes, data model keys/indexes, env vars, auth assumptions
 - Blockers or handoff requests
 
@@ -46,7 +31,6 @@ Check-in template:
 
 - Lane: Mac Mini
 - Task: 2.1
-- Branch: `mac/p2-1-datastack`
 - Status: Done
 - Contracts touched: DynamoDB GSIs (`FamilyIndex`, `StatusIndex`, `CategoryIndex`, `CuisineIndex`)
 - Blockers or handoff requests: None. Codespaces lane can begin 2.2 using these index names as active contract.
