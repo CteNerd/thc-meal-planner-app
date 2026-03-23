@@ -1,5 +1,16 @@
 export const apiBaseUrl = '/api';
 
+export class ApiError extends Error {
+  status: number;
+  payload: unknown;
+
+  constructor(status: number, message: string, payload: unknown) {
+    super(message);
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 type ApiClientConfig = {
   getAccessToken: () => string | null;
   refreshSession: () => Promise<void>;
@@ -69,9 +80,59 @@ export async function apiFetch(path: string, init?: RequestInit, retry = true): 
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await apiFetch(path);
 
+  return await readJsonOrThrow<T>(response);
+}
+
+export async function apiPost<TResponse, TRequest>(path: string, payload: TRequest): Promise<TResponse> {
+  const response = await apiFetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  return await readJsonOrThrow<TResponse>(response);
+}
+
+export async function apiPut<TResponse, TRequest>(path: string, payload: TRequest): Promise<TResponse> {
+  const response = await apiFetch(path, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  return await readJsonOrThrow<TResponse>(response);
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  const response = await apiFetch(path, {
+    method: 'DELETE'
+  });
+
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    await throwApiError(response);
+  }
+}
+
+async function readJsonOrThrow<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    await throwApiError(response);
   }
 
   return (await response.json()) as T;
+}
+
+async function throwApiError(response: Response): Promise<never> {
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  throw new ApiError(response.status, `Request failed with status ${response.status}`, payload);
 }

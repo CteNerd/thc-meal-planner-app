@@ -79,17 +79,65 @@ Check-in template:
 - Contracts touched: None yet
 - Blockers or handoff requests: 2.6 blocked on user confirmation of migration records; 2.8 SecretsStack queued as next Mac Mini work item.
 
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.3
+- Status: In Progress
+- Contracts touched: Aligned `DynamoDb` config to deployed key casing (`PK`/`SK`) and users table mapping (`thc-meal-planner-dev-users`); added profile API tests for partial merge semantics and family claim fallback
+- Blockers or handoff requests: Mac lane can proceed with 2.6 prep; only blocker remains explicit user confirmation of migration records before commit/deploy.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.3, 2.4
+- Status: In Progress
+- Contracts touched: Switched to environment-specific table mapping strategy (base appsettings no table hardcoding; dev appsettings maps `UserProfileDocument` + `DependentProfileDocument` to users table); added repository GSI index query support; scaffolded dependent CRUD endpoints at `/api/family/dependents`
+- Blockers or handoff requests: No Mac blocker for coding; Mac 2.6 remains blocked on explicit migration record confirmation.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.4, 2.5, 2.7
+- Status: In Progress
+- Contracts touched: Added family-scoped dependent service boundary (`IDependentProfileService`), tightened profile role mutation guardrails, added frontend profile/dependent API client touchpoints and shared types
+- Blockers or handoff requests: Await integrated runtime build/test execution in an environment where terminal provider is functional.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.4, 2.5, 2.7
+- Status: In Progress
+- Contracts touched: Centralized user claim parsing via authenticated user context adapter; added member-role denial tests for dependent CRUD routes; wired Profile UI actions for profile save and dependent create/delete via API client
+- Blockers or handoff requests: Mac lane still blocked on 2.6 until migration records are explicitly confirmed by user before commit/deploy.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.4, 2.5, 2.7 commit checkpoint + hardening
+- Status: In Progress
+- Contracts touched: No new route contracts yet; hardening pass in progress for RFC 9457-style authorization failure responses
+- Blockers or handoff requests: Local commit execution blocked in this Codespaces session due terminal ENOPRO provider error; Mac lane can run commit/push from synced working tree.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.7 hardening follow-through
+- Status: In Progress
+- Contracts touched: Dependent authorization failures now consistently return RFC 9457 Problem Details (403) instead of plain forbid; denial-path tests assert forbidden payload content
+- Blockers or handoff requests: Attempted targeted backend test run is still blocked in this session by terminal ENOPRO provider error; require Mac lane execution for integrated test confirmation and commit/push.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
 |---|---|---|---|---|
 | 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); committed to `main` 2026-03-22 |
 | 2.2 | Build DynamoDB data access layer | Codespaces | Done | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
-| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; pending backend config alignment to deployed `PK`/`SK` and table mapping |
-| 2.4 | CRUD `/api/family/dependents` | Codespaces | Not Started | |
-| 2.5 | Profile UI and API integration | Codespaces | Not Started | |
+| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; config aligned to `PK`/`SK` + users mapping; pending integrated build/test run |
+| 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + endpoint tests added; member-role denial tests expanded, pending integrated runtime verification |
+| 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend types + API client methods + profile page load/save/create/delete dependent touchpoints added |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
-| 2.7 | Family-scoped authorization enforcement | Codespaces | Not Started | |
+| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + authorization hardening pass started for dependent operations and profile role update guardrails |
 | 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
 
 ## Milestone Criteria Tracking
@@ -107,5 +155,5 @@ Check-in template:
 2. Add integration tests for familyId enforcement at repository/service boundaries.
 3. Add UI test coverage for profile save and dependents CRUD happy path + validation errors.
 4. Confirm migration payload records with user before committing migration data or scripts.
-5. Align backend `DynamoDb` app configuration with deployed contract (`PK`/`SK`, users table mapping).
-6. Add repository/service integration tests for `FamilyIndex` query behavior before starting 2.4 dependent CRUD.
+5. Add repository/service integration tests for `FamilyIndex` query behavior against deployed DynamoDB.
+6. Add integrated authorization-contract verification pass (401/403/404 payload shape) once terminal test execution is restored.

@@ -18,8 +18,8 @@ public sealed class UpdateProfileRequestValidator : AbstractValidator<UpdateProf
             .When(x => !string.IsNullOrWhiteSpace(x.Email));
 
         RuleFor(x => x.Role)
-            .Must(role => role is null || AllowedRoles.Contains(role))
-            .WithMessage("Role must be one of: head_of_household, member, dependent.");
+            .Must(role => role is null)
+            .WithMessage("Role cannot be updated through this endpoint.");
 
         RuleForEach(x => x.DietaryPrefs)
             .NotEmpty()

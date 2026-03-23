@@ -13,4 +13,12 @@ public interface IDynamoDbRepository<TDocument>
         string partitionKey,
         int? limit = null,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<TDocument>> QueryByIndexPartitionKeyAsync(
+        string indexName,
+        string partitionKeyName,
+        string partitionKeyValue,
+        IReadOnlyDictionary<string, string>? equalsFilters = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default);
 }

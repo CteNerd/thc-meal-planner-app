@@ -1,5 +1,5 @@
 using FluentValidation;
-using System.Security.Claims;
+using ThcMealPlanner.Api.Authentication;
 using ThcMealPlanner.Core.Data;
 
 namespace ThcMealPlanner.Api.Profiles;
@@ -19,13 +19,13 @@ public static class ProfileEndpoints
         IDynamoDbRepository<UserProfileDocument> repository,
         CancellationToken cancellationToken)
     {
-        var sub = httpContext.User.FindFirstValue("sub");
-        if (string.IsNullOrWhiteSpace(sub))
+        var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
+        if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing user subject claim.");
+            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
         }
 
-        var key = BuildProfileKey(sub);
+        var key = BuildProfileKey(userContext.Sub);
         var profile = await repository.GetAsync(key, cancellationToken);
 
         return profile is null
@@ -46,18 +46,17 @@ public static class ProfileEndpoints
             return Results.ValidationProblem(validationResult.ToDictionary());
         }
 
-        var user = httpContext.User;
-        var sub = user.FindFirstValue("sub");
-        if (string.IsNullOrWhiteSpace(sub))
+        var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
+        if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing user subject claim.");
+            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
         }
 
-        var key = BuildProfileKey(sub);
+        var key = BuildProfileKey(userContext.Sub);
         var existing = await repository.GetAsync(key, cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        var merged = Merge(existing, request, user, sub, now);
+        var merged = Merge(existing, request, userContext, now);
 
         await repository.PutAsync(key, merged, cancellationToken);
 
@@ -67,17 +66,16 @@ public static class ProfileEndpoints
     private static UserProfileDocument Merge(
         UserProfileDocument? existing,
         UpdateProfileRequest request,
-        ClaimsPrincipal user,
-        string sub,
+        AuthenticatedUserContext userContext,
         DateTimeOffset now)
     {
         return new UserProfileDocument
         {
-            UserId = existing?.UserId ?? sub,
-            Name = request.Name ?? existing?.Name ?? user.FindFirstValue("name") ?? string.Empty,
-            Email = request.Email ?? existing?.Email ?? user.FindFirstValue("email") ?? string.Empty,
-            FamilyId = existing?.FamilyId ?? user.FindFirstValue("custom:familyId") ?? user.FindFirstValue("familyId") ?? $"FAM#{sub}",
-            Role = request.Role ?? existing?.Role ?? "member",
+            UserId = existing?.UserId ?? userContext.Sub,
+            Name = request.Name ?? existing?.Name ?? userContext.Name,
+            Email = request.Email ?? existing?.Email ?? userContext.Email,
+            FamilyId = existing?.FamilyId ?? userContext.FamilyId,
+            Role = existing?.Role ?? userContext.Role,
             DietaryPrefs = request.DietaryPrefs ?? existing?.DietaryPrefs ?? [],
             Allergies = request.Allergies ?? existing?.Allergies ?? [],
             ExcludedIngredients = request.ExcludedIngredients ?? existing?.ExcludedIngredients ?? [],

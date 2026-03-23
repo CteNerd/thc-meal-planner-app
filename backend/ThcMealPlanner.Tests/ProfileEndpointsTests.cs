@@ -83,6 +83,79 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
         body.Should().Contain("MacroTargets.Calories");
     }
 
+    [Fact]
+    public async Task PutProfile_WhenRoleProvided_ReturnsBadRequest()
+    {
+        var client = CreateAuthenticatedClient(new InMemoryProfileRepository());
+
+        var response = await client.PutAsJsonAsync(
+            "/api/profile",
+            new UpdateProfileRequest
+            {
+                Role = "head_of_household"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Contain("Role cannot be updated");
+    }
+
+    [Fact]
+    public async Task PutProfile_WithPartialPayload_PreservesExistingFields()
+    {
+        var repository = new InMemoryProfileRepository();
+        await repository.PutAsync(
+            new DynamoDbKey("USER#test-user-123", "PROFILE"),
+            new UserProfileDocument
+            {
+                UserId = "test-user-123",
+                Name = "Adult 1",
+                Email = "adult1@example.com",
+                FamilyId = "FAM#existing",
+                Role = "member",
+                DietaryPrefs = ["vegetarian"],
+                ExcludedIngredients = ["mushrooms"],
+                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+                UpdatedAt = DateTimeOffset.UtcNow.AddDays(-1)
+            });
+
+        var client = CreateAuthenticatedClient(repository);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/profile",
+            new UpdateProfileRequest
+            {
+                DefaultServings = 3
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await response.Content.ReadFromJsonAsync<UserProfileDocument>();
+        updated.Should().NotBeNull();
+        updated!.DietaryPrefs.Should().ContainSingle().Which.Should().Be("vegetarian");
+        updated.ExcludedIngredients.Should().ContainSingle().Which.Should().Be("mushrooms");
+        updated.DefaultServings.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task PutProfile_WhenCreatingNewProfile_UsesFamilyIdClaim()
+    {
+        var client = CreateAuthenticatedClient(new InMemoryProfileRepository());
+
+        var response = await client.PutAsJsonAsync(
+            "/api/profile",
+            new UpdateProfileRequest
+            {
+                Name = "Adult 1"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var profile = await response.Content.ReadFromJsonAsync<UserProfileDocument>();
+        profile.Should().NotBeNull();
+        profile!.FamilyId.Should().Be("FAM#test-family");
+    }
+
     private HttpClient CreateAuthenticatedClient(InMemoryProfileRepository repository)
     {
         return _factory.WithWebHostBuilder(builder =>
@@ -134,6 +207,24 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
                 .Where(entry => entry.Key.StartsWith(partitionKey + "|", StringComparison.Ordinal))
                 .Select(entry => entry.Value)
                 .ToList();
+
+            if (limit.HasValue)
+            {
+                items = items.Take(limit.Value).ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<UserProfileDocument>>(items);
+        }
+
+        public Task<IReadOnlyList<UserProfileDocument>> QueryByIndexPartitionKeyAsync(
+            string indexName,
+            string partitionKeyName,
+            string partitionKeyValue,
+            IReadOnlyDictionary<string, string>? equalsFilters = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            var items = _store.Values.ToList();
 
             if (limit.HasValue)
             {

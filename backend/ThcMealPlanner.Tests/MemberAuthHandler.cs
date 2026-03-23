@@ -5,11 +5,11 @@ using Microsoft.Extensions.Options;
 
 namespace ThcMealPlanner.Tests;
 
-public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+public sealed class MemberAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    public const string SchemeName = "Test";
+    public const string SchemeName = "MemberTest";
 
-    public TestAuthHandler(
+    public MemberAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder)
@@ -21,11 +21,11 @@ public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationScheme
     {
         var claims = new[]
         {
-            new Claim("sub", "test-user-123"),
-            new Claim("email", "adult1@example.com"),
-            new Claim("name", "Adult 1"),
+            new Claim("sub", "member-user-456"),
+            new Claim("email", "member@example.com"),
+            new Claim("name", "Member User"),
             new Claim("custom:familyId", "FAM#test-family"),
-            new Claim("custom:role", "head_of_household")
+            new Claim("custom:role", "member")
         };
 
         var identity = new ClaimsIdentity(claims, SchemeName);

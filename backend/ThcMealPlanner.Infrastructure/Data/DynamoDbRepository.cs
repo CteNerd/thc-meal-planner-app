@@ -94,6 +94,61 @@ public sealed class DynamoDbRepository<TDocument> : IDynamoDbRepository<TDocumen
         return response.Items.Select(Deserialize).ToList();
     }
 
+    public async Task<IReadOnlyList<TDocument>> QueryByIndexPartitionKeyAsync(
+        string indexName,
+        string partitionKeyName,
+        string partitionKeyValue,
+        IReadOnlyDictionary<string, string>? equalsFilters = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        var attributeNames = new Dictionary<string, string>
+        {
+            ["#pk"] = partitionKeyName
+        };
+
+        var attributeValues = new Dictionary<string, AttributeValue>
+        {
+            [":pk"] = new() { S = partitionKeyValue }
+        };
+
+        var request = new QueryRequest
+        {
+            TableName = _tableNameResolver.Resolve<TDocument>(),
+            IndexName = indexName,
+            KeyConditionExpression = "#pk = :pk",
+            ExpressionAttributeNames = attributeNames,
+            ExpressionAttributeValues = attributeValues
+        };
+
+        if (equalsFilters is not null && equalsFilters.Count > 0)
+        {
+            var filters = new List<string>();
+            var idx = 0;
+
+            foreach (var filter in equalsFilters)
+            {
+                var nameToken = $"#f{idx}";
+                var valueToken = $":f{idx}";
+                attributeNames[nameToken] = filter.Key;
+                attributeValues[valueToken] = new AttributeValue { S = filter.Value };
+                filters.Add($"{nameToken} = {valueToken}");
+                idx++;
+            }
+
+            request.FilterExpression = string.Join(" AND ", filters);
+        }
+
+        if (limit.HasValue)
+        {
+            request.Limit = limit.Value;
+        }
+
+        var response = await _dynamoDb.QueryAsync(request, cancellationToken);
+
+        return response.Items.Select(Deserialize).ToList();
+    }
+
     private Dictionary<string, AttributeValue> BuildKey(DynamoDbKey key)
     {
         return new Dictionary<string, AttributeValue>
