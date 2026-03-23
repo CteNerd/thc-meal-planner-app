@@ -22,14 +22,14 @@ public static class ProfileEndpoints
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
         if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
+            return ProfileProblemDetails.MissingRequiredUserClaims();
         }
 
         var key = BuildProfileKey(userContext.Sub);
         var profile = await repository.GetAsync(key, cancellationToken);
 
         return profile is null
-            ? Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Profile not found.")
+            ? ProfileProblemDetails.ProfileNotFound()
             : Results.Ok(profile);
     }
 
@@ -49,7 +49,7 @@ public static class ProfileEndpoints
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
         if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
+            return ProfileProblemDetails.MissingRequiredUserClaims();
         }
 
         var key = BuildProfileKey(userContext.Sub);

@@ -127,6 +127,22 @@ Check-in template:
 - Contracts touched: Dependent authorization failures now consistently return RFC 9457 Problem Details (403) instead of plain forbid; denial-path tests assert forbidden payload content
 - Blockers or handoff requests: Attempted targeted backend test run is still blocked in this session by terminal ENOPRO provider error; require Mac lane execution for integrated test confirmation and commit/push.
 
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.7 hardening (ProblemDetails contract)
+- Status: In Progress
+- Contracts touched: Centralized profile/dependent 401/403/404 ProblemDetails builders and normalized titles/details; endpoint tests now assert ProblemDetails payload fields (`status`, `title`, `detail`) including missing-claims unauthorized paths
+- Blockers or handoff requests: Local terminal ENOPRO still blocks integrated `dotnet test` execution and commit commands in this session.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.5 UI/API hardening
+- Status: In Progress
+- Contracts touched: Frontend API error handling now extracts ProblemDetails `detail`/`title`/validation errors for Profile page actions; added focused unit test coverage for API error-message extraction behavior
+- Blockers or handoff requests: Local terminal ENOPRO still blocks integrated frontend test execution in this session.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
@@ -135,9 +151,9 @@ Check-in template:
 | 2.2 | Build DynamoDB data access layer | Codespaces | Done | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
 | 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; config aligned to `PK`/`SK` + users mapping; pending integrated build/test run |
 | 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + endpoint tests added; member-role denial tests expanded, pending integrated runtime verification |
-| 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend types + API client methods + profile page load/save/create/delete dependent touchpoints added |
+| 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend touchpoints + ProblemDetails-aware error messaging + unit test for API error extraction; pending integrated frontend test run |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
-| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + authorization hardening pass started for dependent operations and profile role update guardrails |
+| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 ProblemDetails + contract assertions in endpoint tests; pending integrated test run |
 | 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
 
 ## Milestone Criteria Tracking

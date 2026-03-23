@@ -4,6 +4,7 @@ import type { DependentProfile, UserProfile } from '../types';
 import { createDependent, deleteDependent, getProfile, listDependents, updateProfile } from '../services/profileApi';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { getApiErrorMessage } from '../services/api';
 
 export function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -30,12 +31,12 @@ export function ProfilePage() {
         setProfile(profileResponse);
         setNameDraft(profileResponse.name);
         setDependents(dependentsResponse);
-      } catch {
+      } catch (error) {
         if (!active) {
           return;
         }
 
-        setError('Unable to load profile data.');
+        setError(getApiErrorMessage(error, 'Unable to load profile data.'));
       } finally {
         if (active) {
           setIsLoading(false);
@@ -63,8 +64,8 @@ export function ProfilePage() {
       });
       setProfile(updated);
       setNameDraft(updated.name);
-    } catch {
-      setError('Unable to save profile changes.');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Unable to save profile changes.'));
     } finally {
       setIsSaving(false);
     }
@@ -86,8 +87,8 @@ export function ProfilePage() {
       setDependents((current) => [...current, created]);
       setNewDependentName('');
       setNewDependentAgeGroup('');
-    } catch {
-      setError('Unable to create dependent.');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Unable to create dependent.'));
     } finally {
       setIsSaving(false);
     }
@@ -99,8 +100,8 @@ export function ProfilePage() {
       setError(null);
       await deleteDependent(userId);
       setDependents((current) => current.filter((dependent) => dependent.userId !== userId));
-    } catch {
-      setError('Unable to delete dependent.');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Unable to delete dependent.'));
     } finally {
       setIsSaving(false);
     }

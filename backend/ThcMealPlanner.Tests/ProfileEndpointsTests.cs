@@ -27,6 +27,26 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
         var response = await client.GetAsync("/api/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        problem.Title.Should().Be("Profile not found");
+        problem.Detail.Should().Be("No profile exists for the current user.");
+    }
+
+    [Fact]
+    public async Task GetProfile_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var client = CreateMissingClaimsClient(new InMemoryProfileRepository());
+
+        var response = await client.GetAsync("/api/profile");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
     }
 
     [Fact]
@@ -165,6 +185,23 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
                 services.AddAuthentication(TestAuthHandler.SchemeName)
                     .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
                         TestAuthHandler.SchemeName,
+                        _ => { });
+
+                services.AddSingleton<IDynamoDbRepository<UserProfileDocument>>(repository);
+                services.AddScoped<IValidator<UpdateProfileRequest>, UpdateProfileRequestValidator>();
+            });
+        }).CreateClient();
+    }
+
+    private HttpClient CreateMissingClaimsClient(InMemoryProfileRepository repository)
+    {
+        return _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddAuthentication(MissingClaimsAuthHandler.SchemeName)
+                    .AddScheme<AuthenticationSchemeOptions, MissingClaimsAuthHandler>(
+                        MissingClaimsAuthHandler.SchemeName,
                         _ => { });
 
                 services.AddSingleton<IDynamoDbRepository<UserProfileDocument>>(repository);

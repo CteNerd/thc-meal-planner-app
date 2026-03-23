@@ -24,12 +24,12 @@ public static class DependentEndpoints
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
         if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
+            return ProfileProblemDetails.MissingRequiredUserClaims();
         }
 
         if (!userContext.IsHeadOfHousehold)
         {
-            return ForbiddenProblem();
+            return ProfileProblemDetails.HeadOfHouseholdRequired();
         }
 
         var dependents = await dependentProfileService.ListByFamilyAsync(userContext.FamilyId, cancellationToken);
@@ -47,12 +47,12 @@ public static class DependentEndpoints
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
         if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
+            return ProfileProblemDetails.MissingRequiredUserClaims();
         }
 
         if (!userContext.IsHeadOfHousehold)
         {
-            return ForbiddenProblem();
+            return ProfileProblemDetails.HeadOfHouseholdRequired();
         }
 
         var validationResult = await validator.ValidateAsync(request, cancellationToken);
@@ -77,12 +77,12 @@ public static class DependentEndpoints
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
         if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
+            return ProfileProblemDetails.MissingRequiredUserClaims();
         }
 
         if (!userContext.IsHeadOfHousehold)
         {
-            return ForbiddenProblem();
+            return ProfileProblemDetails.HeadOfHouseholdRequired();
         }
 
         var validationResult = await validator.ValidateAsync(request, cancellationToken);
@@ -94,7 +94,7 @@ public static class DependentEndpoints
         var updated = await dependentProfileService.UpdateAsync(userContext.FamilyId, userId, request, cancellationToken);
         if (updated is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Dependent not found.");
+            return ProfileProblemDetails.DependentNotFound();
         }
 
         return Results.Ok(updated);
@@ -109,18 +109,18 @@ public static class DependentEndpoints
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
         if (userContext is null)
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Missing required user claims.");
+            return ProfileProblemDetails.MissingRequiredUserClaims();
         }
 
         if (!userContext.IsHeadOfHousehold)
         {
-            return ForbiddenProblem();
+            return ProfileProblemDetails.HeadOfHouseholdRequired();
         }
 
         var deleted = await dependentProfileService.DeleteAsync(userContext.FamilyId, userId, cancellationToken);
         if (!deleted)
         {
-            return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Dependent not found.");
+            return ProfileProblemDetails.DependentNotFound();
         }
 
         return Results.NoContent();
@@ -135,11 +135,4 @@ public static class DependentEndpoints
                 grouping => grouping.Select(error => error.ErrorMessage).ToArray());
     }
 
-    private static IResult ForbiddenProblem()
-    {
-        return Results.Problem(
-            statusCode: StatusCodes.Status403Forbidden,
-            title: "Forbidden",
-            detail: "This action requires head_of_household role.");
-    }
 }

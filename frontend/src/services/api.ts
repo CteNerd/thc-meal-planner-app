@@ -11,6 +11,12 @@ export class ApiError extends Error {
   }
 }
 
+type ProblemDetailsLike = {
+  title?: string;
+  detail?: string;
+  errors?: Record<string, string[]>;
+};
+
 type ApiClientConfig = {
   getAccessToken: () => string | null;
   refreshSession: () => Promise<void>;
@@ -117,6 +123,38 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+export function getApiErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (!isApiError(error)) {
+    return fallbackMessage;
+  }
+
+  const problem = toProblemDetails(error.payload);
+
+  if (problem?.detail && problem.detail.trim().length > 0) {
+    return problem.detail;
+  }
+
+  if (problem?.title && problem.title.trim().length > 0) {
+    return problem.title;
+  }
+
+  if (problem?.errors) {
+    const firstValidationMessage = Object.values(problem.errors)
+      .flat()
+      .find((message) => message.trim().length > 0);
+
+    if (firstValidationMessage) {
+      return firstValidationMessage;
+    }
+  }
+
+  return fallbackMessage;
+}
+
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
     await throwApiError(response);
@@ -135,4 +173,12 @@ async function throwApiError(response: Response): Promise<never> {
   }
 
   throw new ApiError(response.status, `Request failed with status ${response.status}`, payload);
+}
+
+function toProblemDetails(payload: unknown): ProblemDetailsLike | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  return payload as ProblemDetailsLike;
 }

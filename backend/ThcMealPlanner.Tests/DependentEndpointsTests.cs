@@ -102,6 +102,11 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
             new UpdateDependentRequest { Name = "Updated" });
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        problem.Title.Should().Be("Dependent not found");
+        problem.Detail.Should().Be("No dependent exists for the requested user id within this family.");
     }
 
     [Fact]
@@ -136,10 +141,13 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
         var client = CreateMemberClient(repository);
 
         var response = await client.GetAsync("/api/family/dependents");
-        var body = await response.Content.ReadAsStringAsync();
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        body.Should().Contain("Forbidden");
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Forbidden);
+        problem.Title.Should().Be("Forbidden");
+        problem.Detail.Should().Be("This action requires head_of_household role.");
     }
 
     [Fact]
@@ -151,10 +159,13 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
         var response = await client.PostAsJsonAsync(
             "/api/family/dependents",
             new CreateDependentRequest { Name = "Child 3" });
-        var body = await response.Content.ReadAsStringAsync();
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        body.Should().Contain("Forbidden");
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Forbidden);
+        problem.Title.Should().Be("Forbidden");
+        problem.Detail.Should().Be("This action requires head_of_household role.");
     }
 
     [Fact]
@@ -166,10 +177,13 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
         var response = await client.PutAsJsonAsync(
             "/api/family/dependents/dep_abc123",
             new UpdateDependentRequest { Name = "Updated" });
-        var body = await response.Content.ReadAsStringAsync();
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        body.Should().Contain("Forbidden");
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Forbidden);
+        problem.Title.Should().Be("Forbidden");
+        problem.Detail.Should().Be("This action requires head_of_household role.");
     }
 
     [Fact]
@@ -179,10 +193,29 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
         var client = CreateMemberClient(repository);
 
         var response = await client.DeleteAsync("/api/family/dependents/dep_abc123");
-        var body = await response.Content.ReadAsStringAsync();
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        body.Should().Contain("Forbidden");
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Forbidden);
+        problem.Title.Should().Be("Forbidden");
+        problem.Detail.Should().Be("This action requires head_of_household role.");
+    }
+
+    [Fact]
+    public async Task GetDependents_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var repository = new InMemoryDependentRepository();
+        var client = CreateMissingClaimsClient(repository);
+
+        var response = await client.GetAsync("/api/family/dependents");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
     }
 
     private HttpClient CreateAuthenticatedClient(InMemoryDependentRepository repository)
@@ -212,6 +245,24 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
                 services.AddAuthentication(MemberAuthHandler.SchemeName)
                     .AddScheme<AuthenticationSchemeOptions, MemberAuthHandler>(
                         MemberAuthHandler.SchemeName,
+                        _ => { });
+
+                services.AddSingleton<IDynamoDbRepository<DependentProfileDocument>>(repository);
+                services.AddScoped<IValidator<CreateDependentRequest>, CreateDependentRequestValidator>();
+                services.AddScoped<IValidator<UpdateDependentRequest>, UpdateDependentRequestValidator>();
+            });
+        }).CreateClient();
+    }
+
+    private HttpClient CreateMissingClaimsClient(InMemoryDependentRepository repository)
+    {
+        return _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddAuthentication(MissingClaimsAuthHandler.SchemeName)
+                    .AddScheme<AuthenticationSchemeOptions, MissingClaimsAuthHandler>(
+                        MissingClaimsAuthHandler.SchemeName,
                         _ => { });
 
                 services.AddSingleton<IDynamoDbRepository<DependentProfileDocument>>(repository);
