@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { CookbookPage } from './CookbookPage';
 import type { FavoriteRecipe, Recipe } from '../types';
 import { ApiError } from '../services/api';
@@ -26,6 +27,7 @@ function buildRecipe(overrides?: Partial<Recipe>): Recipe {
     tags: ['quick'],
     ingredients: [{ name: 'Broccoli' }],
     instructions: ['Stir fry all ingredients.'],
+    sourceType: 'manual',
     createdByUserId: 'test-user-123',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -44,6 +46,14 @@ function buildFavorite(overrides?: Partial<FavoriteRecipe>): FavoriteRecipe {
   };
 }
 
+function renderCookbookPage() {
+  render(
+    <MemoryRouter>
+      <CookbookPage />
+    </MemoryRouter>
+  );
+}
+
 describe('CookbookPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -55,7 +65,7 @@ describe('CookbookPage', () => {
     mockedListRecipes.mockResolvedValue([buildRecipe(), buildRecipe({ recipeId: 'rec_2', name: 'Taco Bowls' })]);
     mockedListFavoriteRecipes.mockResolvedValue([buildFavorite()]);
 
-    render(<CookbookPage />);
+    renderCookbookPage();
 
     expect(await screen.findByText('Veggie Stir Fry')).toBeInTheDocument();
     expect(screen.getByText('Taco Bowls')).toBeInTheDocument();
@@ -70,7 +80,7 @@ describe('CookbookPage', () => {
     ]);
     mockedListFavoriteRecipes.mockResolvedValue([]);
 
-    render(<CookbookPage />);
+    renderCookbookPage();
 
     await screen.findByText('Veggie Stir Fry');
 
@@ -88,7 +98,7 @@ describe('CookbookPage', () => {
     mockedListRecipes.mockResolvedValue([buildRecipe()]);
     mockedListFavoriteRecipes.mockResolvedValue([]);
 
-    render(<CookbookPage />);
+    renderCookbookPage();
 
     await screen.findByText('Veggie Stir Fry');
     fireEvent.click(screen.getByRole('button', { name: 'Favorite' }));
@@ -117,7 +127,7 @@ describe('CookbookPage', () => {
     );
     mockedListFavoriteRecipes.mockResolvedValue([]);
 
-    render(<CookbookPage />);
+    renderCookbookPage();
 
     expect(await screen.findByText('Recipe access denied.')).toBeInTheDocument();
   });

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace ThcMealPlanner.Api.Recipes;
 
@@ -44,7 +45,17 @@ public sealed partial class RecipeImportService : IRecipeImportService
         }
 
         var html = System.Text.Encoding.UTF8.GetString(memory.ToArray());
-        return ParseDraft(uri, html);
+        return ParseImportedRecipeDraft(uri, html);
+    }
+
+    internal static ImportedRecipeDraft ParseImportedRecipeDraft(Uri sourceUrl, string html)
+    {
+        if (TryParseJsonLdDraft(sourceUrl, html, out var jsonLdDraft))
+        {
+            return jsonLdDraft;
+        }
+
+        return ParseDraftFromText(sourceUrl, html);
     }
 
     private static Uri ValidateUrl(string url)
@@ -110,7 +121,7 @@ public sealed partial class RecipeImportService : IRecipeImportService
         };
     }
 
-    private static ImportedRecipeDraft ParseDraft(Uri sourceUrl, string html)
+    private static ImportedRecipeDraft ParseDraftFromText(Uri sourceUrl, string html)
     {
         var normalizedText = NormalizeWhitespace(StripHtml(html));
         var lines = normalizedText
@@ -121,11 +132,11 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
         var title = ExtractTitle(html) ?? lines.FirstOrDefault() ?? "Imported recipe";
         var description = ExtractDescription(html) ?? lines.Skip(1).FirstOrDefault();
-        var ingredients = ExtractSection(lines, "ingredients", new[] { "instructions", "method", "directions", "notes" })
+        var ingredients = ExtractSection(lines, new[] { "ingredients", "ingredient" }, new[] { "instructions", "method", "directions", "notes", "nutrition" })
             .Select(line => new RecipeIngredientModel { Name = line })
             .Take(20)
             .ToList();
-        var instructions = ExtractSection(lines, "instructions", new[] { "notes", "nutrition" })
+        var instructions = ExtractSection(lines, new[] { "instructions", "method", "directions" }, new[] { "notes", "nutrition" })
             .Take(20)
             .ToList();
 
@@ -170,9 +181,9 @@ public sealed partial class RecipeImportService : IRecipeImportService
         return "dinner";
     }
 
-    private static List<string> ExtractSection(IReadOnlyList<string> lines, string startHeading, IReadOnlyList<string> stopHeadings)
+    private static List<string> ExtractSection(IReadOnlyList<string> lines, IReadOnlyList<string> startHeadings, IReadOnlyList<string> stopHeadings)
     {
-        var startIndex = lines.ToList().FindIndex(line => string.Equals(line, startHeading, StringComparison.OrdinalIgnoreCase));
+        var startIndex = lines.ToList().FindIndex(line => IsHeadingMatch(line, startHeadings));
         if (startIndex < 0)
         {
             return [];
@@ -182,7 +193,7 @@ public sealed partial class RecipeImportService : IRecipeImportService
         for (var index = startIndex + 1; index < lines.Count; index++)
         {
             var line = lines[index];
-            if (stopHeadings.Any(stop => string.Equals(line, stop, StringComparison.OrdinalIgnoreCase)))
+            if (IsHeadingMatch(line, stopHeadings))
             {
                 break;
             }
@@ -192,10 +203,314 @@ public sealed partial class RecipeImportService : IRecipeImportService
                 continue;
             }
 
-            sectionLines.Add(line.TrimStart('-', '*', ' ', '\t'));
+            sectionLines.Add(CleanListLine(line));
         }
 
         return sectionLines;
+    }
+
+    private static bool TryParseJsonLdDraft(Uri sourceUrl, string html, out ImportedRecipeDraft draft)
+    {
+        var scripts = JsonLdScriptRegex().Matches(html);
+        foreach (Match scriptMatch in scripts)
+        {
+            if (!scriptMatch.Success)
+            {
+                continue;
+            }
+
+            var scriptBody = scriptMatch.Groups[1].Value;
+            if (TryFindRecipeJsonElement(scriptBody, out var recipeElement))
+            {
+                draft = BuildDraftFromJsonLd(sourceUrl, recipeElement);
+                return true;
+            }
+        }
+
+        draft = default!;
+        return false;
+    }
+
+    private static bool TryFindRecipeJsonElement(string json, out JsonElement recipeElement)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (TryFindRecipeJsonElement(doc.RootElement, out var foundRecipeElement))
+            {
+                recipeElement = foundRecipeElement.Clone();
+                return true;
+            }
+        }
+        catch (JsonException)
+        {
+            recipeElement = default;
+            return false;
+        }
+
+        recipeElement = default;
+        return false;
+    }
+
+    private static bool TryFindRecipeJsonElement(JsonElement element, out JsonElement recipeElement)
+    {
+        if (IsRecipeType(element))
+        {
+            recipeElement = element;
+            return true;
+        }
+
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (property.NameEquals("@graph") && property.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var graphItem in property.Value.EnumerateArray())
+                        {
+                            if (TryFindRecipeJsonElement(graphItem, out recipeElement))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+
+                    if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array &&
+                        TryFindRecipeJsonElement(property.Value, out recipeElement))
+                    {
+                        return true;
+                    }
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var arrayItem in element.EnumerateArray())
+                {
+                    if (TryFindRecipeJsonElement(arrayItem, out recipeElement))
+                    {
+                        return true;
+                    }
+                }
+                break;
+        }
+
+        recipeElement = default;
+        return false;
+    }
+
+    private static bool IsRecipeType(JsonElement element)
+    {
+        if (!element.TryGetProperty("@type", out var typeElement))
+        {
+            return false;
+        }
+
+        return typeElement.ValueKind switch
+        {
+            JsonValueKind.String => typeElement.GetString()?.Contains("Recipe", StringComparison.OrdinalIgnoreCase) == true,
+            JsonValueKind.Array => typeElement.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Any(type => type?.Contains("Recipe", StringComparison.OrdinalIgnoreCase) == true),
+            _ => false
+        };
+    }
+
+    private static ImportedRecipeDraft BuildDraftFromJsonLd(Uri sourceUrl, JsonElement recipe)
+    {
+        var name = GetString(recipe, "name") ?? "Imported recipe";
+        var description = GetString(recipe, "description");
+        var cuisine = GetString(recipe, "recipeCuisine");
+        var category = NormalizeCategory(GetString(recipe, "recipeCategory"));
+        var servings = ParseFirstInt(GetString(recipe, "recipeYield"));
+        var prepTimeMinutes = ParseDurationMinutes(GetString(recipe, "prepTime"));
+        var cookTimeMinutes = ParseDurationMinutes(GetString(recipe, "cookTime"));
+        var tags = ParseDelimitedList(GetString(recipe, "keywords"));
+        var ingredients = ParseJsonLdIngredients(recipe);
+        var instructions = ParseJsonLdInstructions(recipe);
+
+        var warnings = new List<string>();
+        if (ingredients.Count == 0)
+        {
+            warnings.Add("JSON-LD recipe did not include ingredients. Review before saving.");
+            ingredients = [new RecipeIngredientModel { Name = "Review source and add ingredients." }];
+        }
+
+        if (instructions.Count == 0)
+        {
+            warnings.Add("JSON-LD recipe did not include instructions. Review before saving.");
+            instructions = ["Review source and add preparation steps."];
+        }
+
+        return new ImportedRecipeDraft
+        {
+            Name = name,
+            Description = description,
+            Category = category,
+            Cuisine = cuisine,
+            Servings = servings,
+            PrepTimeMinutes = prepTimeMinutes,
+            CookTimeMinutes = cookTimeMinutes,
+            Tags = tags,
+            Ingredients = ingredients,
+            Instructions = instructions,
+            SourceType = "url",
+            SourceUrl = sourceUrl.ToString(),
+            Warnings = warnings
+        };
+    }
+
+    private static List<RecipeIngredientModel> ParseJsonLdIngredients(JsonElement recipe)
+    {
+        if (!recipe.TryGetProperty("recipeIngredient", out var ingredientsElement) || ingredientsElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return ingredientsElement.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString()?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => new RecipeIngredientModel { Name = value! })
+            .Take(30)
+            .ToList();
+    }
+
+    private static List<string> ParseJsonLdInstructions(JsonElement recipe)
+    {
+        if (!recipe.TryGetProperty("recipeInstructions", out var instructionsElement))
+        {
+            return [];
+        }
+
+        var instructions = new List<string>();
+
+        switch (instructionsElement.ValueKind)
+        {
+            case JsonValueKind.String:
+                instructions.AddRange(instructionsElement.GetString()?
+                    .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    ?? []);
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in instructionsElement.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var value = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            instructions.Add(value.Trim());
+                        }
+
+                        continue;
+                    }
+
+                    if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        var text = GetString(item, "text") ?? GetString(item, "name");
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            instructions.Add(text.Trim());
+                        }
+                    }
+                }
+                break;
+        }
+
+        return instructions.Take(30).ToList();
+    }
+
+    private static string NormalizeCategory(string? rawCategory)
+    {
+        if (string.IsNullOrWhiteSpace(rawCategory))
+        {
+            return "dinner";
+        }
+
+        var normalized = rawCategory.Trim().ToLowerInvariant();
+        if (normalized.Contains("breakfast")) return "breakfast";
+        if (normalized.Contains("lunch")) return "lunch";
+        if (normalized.Contains("snack")) return "snack";
+        return "dinner";
+    }
+
+    private static List<string> ParseDelimitedList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return value
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(tag => tag.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+    }
+
+    private static int? ParseFirstInt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var digits = FirstIntRegex().Match(value);
+        if (!digits.Success)
+        {
+            return null;
+        }
+
+        return int.TryParse(digits.Value, out var parsed) ? parsed : null;
+    }
+
+    private static int? ParseDurationMinutes(string? isoDuration)
+    {
+        if (string.IsNullOrWhiteSpace(isoDuration))
+        {
+            return null;
+        }
+
+        try
+        {
+            var duration = System.Xml.XmlConvert.ToTimeSpan(isoDuration);
+            return (int)Math.Round(duration.TotalMinutes);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static string? GetString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind == JsonValueKind.String ? property.GetString() : null;
+    }
+
+    private static bool IsHeadingMatch(string line, IReadOnlyList<string> headings)
+    {
+        var normalizedLine = line.Trim().ToLowerInvariant();
+
+        return headings.Any(heading =>
+            normalizedLine.Equals(heading, StringComparison.OrdinalIgnoreCase) ||
+            normalizedLine.Equals($"{heading}:", StringComparison.OrdinalIgnoreCase) ||
+            normalizedLine.StartsWith($"{heading} ", StringComparison.OrdinalIgnoreCase) ||
+            normalizedLine.StartsWith($"{heading}:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string CleanListLine(string line)
+    {
+        var cleaned = line.Trim();
+        cleaned = BulletPrefixRegex().Replace(cleaned, string.Empty);
+        cleaned = NumberPrefixRegex().Replace(cleaned, string.Empty);
+        return cleaned.Trim();
     }
 
     private static string? ExtractTitle(string html)
@@ -246,4 +561,16 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
     [GeneratedRegex("[\\t ]+")]
     private static partial Regex MultiWhitespaceRegex();
+
+    [GeneratedRegex("<script[^>]*type=[\"']application/ld\\+json[\"'][^>]*>([\\s\\S]*?)</script>", RegexOptions.IgnoreCase)]
+    private static partial Regex JsonLdScriptRegex();
+
+    [GeneratedRegex("\\d+")]
+    private static partial Regex FirstIntRegex();
+
+    [GeneratedRegex("^[-*•]+\\s*")]
+    private static partial Regex BulletPrefixRegex();
+
+    [GeneratedRegex("^\\d+[.)]\\s*")]
+    private static partial Regex NumberPrefixRegex();
 }
