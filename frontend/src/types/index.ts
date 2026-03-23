@@ -87,6 +87,64 @@ export type CreateDependentPayload = {
 
 export type UpdateDependentPayload = Partial<CreateDependentPayload>;
 
+export type RecipeIngredient = {
+  name: string;
+  quantity?: string;
+  unit?: string;
+  section?: string;
+  notes?: string;
+};
+
+export type RecipeNutrition = {
+  calories?: number;
+  protein?: number;
+  carbohydrates?: number;
+  fat?: number;
+  fiber?: number;
+  sodium?: number;
+  sugar?: number;
+};
+
+export type Recipe = {
+  recipeId: string;
+  familyId: string;
+  name: string;
+  description?: string;
+  category: string;
+  cuisine?: string;
+  servings?: number;
+  prepTimeMinutes?: number;
+  cookTimeMinutes?: number;
+  proteinSource?: string;
+  cookingMethod?: string;
+  difficulty?: string;
+  tags: string[];
+  ingredients: RecipeIngredient[];
+  instructions: string[];
+  nutrition?: RecipeNutrition;
+  imageKey?: string;
+  variations?: string;
+  storageInfo?: string;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FavoriteRecipe = {
+  userId: string;
+  recipeId: string;
+  recipeName: string;
+  recipeCategory: string;
+  notes?: string;
+  portionOverride?: number;
+  addedAt: string;
+};
+
+export type FavoriteRecipePayload = {
+  notes?: string;
+  portionOverride?: number;
+};
+
 export type ApiProblemDetails = {
   title?: string;
   status?: number;

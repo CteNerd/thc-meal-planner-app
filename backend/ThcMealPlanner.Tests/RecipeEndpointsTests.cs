@@ -1,0 +1,404 @@
+using FluentAssertions;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using System.Net;
+using System.Net.Http.Json;
+using ThcMealPlanner.Api.Recipes;
+using ThcMealPlanner.Core.Data;
+
+namespace ThcMealPlanner.Tests;
+
+public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly WebApplicationFactory<Program> _factory;
+
+    public RecipeEndpointsTests(WebApplicationFactory<Program> factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task GetRecipes_ReturnsFamilyScopedRecipes()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#test-family", "RECIPE#rec_1"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_1",
+                FamilyId = "FAM#test-family",
+                Name = "Test Family Recipe",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "test-user-123",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#other", "RECIPE#rec_2"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_2",
+                FamilyId = "FAM#other",
+                Name = "Other Family Recipe",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Pasta" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "other-user",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.GetAsync("/api/recipes");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var recipes = await response.Content.ReadFromJsonAsync<List<RecipeDocument>>();
+        recipes.Should().NotBeNull();
+        recipes!.Should().HaveCount(1);
+        recipes[0].RecipeId.Should().Be("rec_1");
+    }
+
+    [Fact]
+    public async Task PostRecipe_WithValidPayload_CreatesRecipe()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/recipes",
+            new CreateRecipeRequest
+            {
+                Name = "Weeknight Stir Fry",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Broccoli" }],
+                Instructions = ["Stir fry everything."]
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<RecipeDocument>();
+        created.Should().NotBeNull();
+        created!.RecipeId.Should().StartWith("rec_");
+        created.FamilyId.Should().Be("FAM#test-family");
+    }
+
+    [Fact]
+    public async Task PostRecipe_WithInvalidPayload_ReturnsValidationProblem()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/recipes",
+            new CreateRecipeRequest
+            {
+                Name = string.Empty,
+                Category = "invalid",
+                Ingredients = [],
+                Instructions = []
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("Name");
+        problem.Errors.Should().ContainKey("Category");
+        problem.Errors.Should().ContainKey("Ingredients");
+        problem.Errors.Should().ContainKey("Instructions");
+    }
+
+    [Fact]
+    public async Task PutRecipe_OutsideFamily_ReturnsNotFoundProblemDetails()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#other", "RECIPE#rec_other"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_other",
+                FamilyId = "FAM#other",
+                Name = "Other Family Recipe",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Pasta" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "other-user",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/recipes/rec_other",
+            new UpdateRecipeRequest
+            {
+                Name = "Updated Name"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        problem.Title.Should().Be("Recipe not found");
+    }
+
+    [Fact]
+    public async Task FavoriteEndpoints_AddListAndRemoveFavorites()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#test-family", "RECIPE#rec_fav"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_fav",
+                FamilyId = "FAM#test-family",
+                Name = "Favorite Recipe",
+                Category = "lunch",
+                Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "test-user-123",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var addResponse = await client.PostAsJsonAsync(
+            "/api/recipes/rec_fav/favorite",
+            new FavoriteRecipeRequest
+            {
+                Notes = "Double the sauce",
+                PortionOverride = 6
+            });
+
+        var listResponse = await client.GetAsync("/api/recipes/favorites");
+        var removeResponse = await client.DeleteAsync("/api/recipes/rec_fav/favorite");
+        var listAfterRemoveResponse = await client.GetAsync("/api/recipes/favorites");
+
+        addResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var addedFavorite = await addResponse.Content.ReadFromJsonAsync<FavoriteRecipeDocument>();
+        addedFavorite.Should().NotBeNull();
+        addedFavorite!.RecipeId.Should().Be("rec_fav");
+        addedFavorite.PortionOverride.Should().Be(6);
+
+        listResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var favorites = await listResponse.Content.ReadFromJsonAsync<List<FavoriteRecipeDocument>>();
+        favorites.Should().NotBeNull();
+        favorites!.Should().ContainSingle();
+
+        removeResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        listAfterRemoveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var favoritesAfterRemove = await listAfterRemoveResponse.Content.ReadFromJsonAsync<List<FavoriteRecipeDocument>>();
+        favoritesAfterRemove.Should().NotBeNull();
+        favoritesAfterRemove!.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetRecipes_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        var client = CreateMissingClaimsClient(recipeRepository, favoriteRepository);
+
+        var response = await client.GetAsync("/api/recipes");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
+    }
+
+    private HttpClient CreateAuthenticatedClient(
+        InMemoryRecipeRepository recipeRepository,
+        InMemoryFavoriteRepository favoriteRepository)
+    {
+        return _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+                        TestAuthHandler.SchemeName,
+                        _ => { });
+
+                services.AddScoped<IRecipeService>(_ => new RecipeService(recipeRepository, favoriteRepository));
+                services.AddSingleton<IDynamoDbRepository<RecipeDocument>>(recipeRepository);
+                services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
+                services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
+                services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
+                services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
+            });
+        }).CreateClient();
+    }
+
+    private HttpClient CreateMissingClaimsClient(
+        InMemoryRecipeRepository recipeRepository,
+        InMemoryFavoriteRepository favoriteRepository)
+    {
+        return _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddAuthentication(MissingClaimsAuthHandler.SchemeName)
+                    .AddScheme<AuthenticationSchemeOptions, MissingClaimsAuthHandler>(
+                        MissingClaimsAuthHandler.SchemeName,
+                        _ => { });
+
+                services.AddScoped<IRecipeService>(_ => new RecipeService(recipeRepository, favoriteRepository));
+                services.AddSingleton<IDynamoDbRepository<RecipeDocument>>(recipeRepository);
+                services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
+                services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
+                services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
+                services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
+            });
+        }).CreateClient();
+    }
+
+    private sealed class InMemoryRecipeRepository : IDynamoDbRepository<RecipeDocument>
+    {
+        private readonly Dictionary<string, RecipeDocument> _store = new(StringComparer.Ordinal);
+
+        public Task<RecipeDocument?> GetAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.TryGetValue(ToMapKey(key), out var document);
+            return Task.FromResult(document);
+        }
+
+        public Task PutAsync(DynamoDbKey key, RecipeDocument document, CancellationToken cancellationToken = default)
+        {
+            _store[ToMapKey(key)] = document;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.Remove(ToMapKey(key));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<RecipeDocument>> QueryByPartitionKeyAsync(
+            string partitionKey,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            var items = _store
+                .Where(entry => entry.Key.StartsWith(partitionKey + "|", StringComparison.Ordinal))
+                .Select(entry => entry.Value)
+                .ToList();
+
+            if (limit.HasValue)
+            {
+                items = items.Take(limit.Value).ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<RecipeDocument>>(items);
+        }
+
+        public Task<IReadOnlyList<RecipeDocument>> QueryByIndexPartitionKeyAsync(
+            string indexName,
+            string partitionKeyName,
+            string partitionKeyValue,
+            IReadOnlyDictionary<string, string>? equalsFilters = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            var items = _store.Values
+                .Where(item => string.Equals(item.FamilyId, partitionKeyValue, StringComparison.Ordinal))
+                .ToList();
+
+            if (limit.HasValue)
+            {
+                items = items.Take(limit.Value).ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<RecipeDocument>>(items);
+        }
+
+        private static string ToMapKey(DynamoDbKey key)
+        {
+            return $"{key.PartitionKey}|{key.SortKey}";
+        }
+    }
+
+    private sealed class InMemoryFavoriteRepository : IDynamoDbRepository<FavoriteRecipeDocument>
+    {
+        private readonly Dictionary<string, FavoriteRecipeDocument> _store = new(StringComparer.Ordinal);
+
+        public Task<FavoriteRecipeDocument?> GetAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.TryGetValue(ToMapKey(key), out var document);
+            return Task.FromResult(document);
+        }
+
+        public Task PutAsync(DynamoDbKey key, FavoriteRecipeDocument document, CancellationToken cancellationToken = default)
+        {
+            _store[ToMapKey(key)] = document;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.Remove(ToMapKey(key));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<FavoriteRecipeDocument>> QueryByPartitionKeyAsync(
+            string partitionKey,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            var items = _store
+                .Where(entry => entry.Key.StartsWith(partitionKey + "|", StringComparison.Ordinal))
+                .Select(entry => entry.Value)
+                .ToList();
+
+            if (limit.HasValue)
+            {
+                items = items.Take(limit.Value).ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<FavoriteRecipeDocument>>(items);
+        }
+
+        public Task<IReadOnlyList<FavoriteRecipeDocument>> QueryByIndexPartitionKeyAsync(
+            string indexName,
+            string partitionKeyName,
+            string partitionKeyValue,
+            IReadOnlyDictionary<string, string>? equalsFilters = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            var items = _store.Values.ToList();
+
+            if (limit.HasValue)
+            {
+                items = items.Take(limit.Value).ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<FavoriteRecipeDocument>>(items);
+        }
+
+        private static string ToMapKey(DynamoDbKey key)
+        {
+            return $"{key.PartitionKey}|{key.SortKey}";
+        }
+    }
+}

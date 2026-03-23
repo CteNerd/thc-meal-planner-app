@@ -1,0 +1,124 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CookbookPage } from './CookbookPage';
+import type { FavoriteRecipe, Recipe } from '../types';
+import { ApiError } from '../services/api';
+import { addFavoriteRecipe, listFavoriteRecipes, listRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+
+vi.mock('../services/recipeApi', () => ({
+  listRecipes: vi.fn(),
+  listFavoriteRecipes: vi.fn(),
+  addFavoriteRecipe: vi.fn(),
+  removeFavoriteRecipe: vi.fn()
+}));
+
+const mockedListRecipes = vi.mocked(listRecipes);
+const mockedListFavoriteRecipes = vi.mocked(listFavoriteRecipes);
+const mockedAddFavoriteRecipe = vi.mocked(addFavoriteRecipe);
+const mockedRemoveFavoriteRecipe = vi.mocked(removeFavoriteRecipe);
+
+function buildRecipe(overrides?: Partial<Recipe>): Recipe {
+  return {
+    recipeId: 'rec_1',
+    familyId: 'FAM#test-family',
+    name: 'Veggie Stir Fry',
+    category: 'dinner',
+    tags: ['quick'],
+    ingredients: [{ name: 'Broccoli' }],
+    instructions: ['Stir fry all ingredients.'],
+    createdByUserId: 'test-user-123',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function buildFavorite(overrides?: Partial<FavoriteRecipe>): FavoriteRecipe {
+  return {
+    userId: 'test-user-123',
+    recipeId: 'rec_1',
+    recipeName: 'Veggie Stir Fry',
+    recipeCategory: 'dinner',
+    addedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+describe('CookbookPage', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockedAddFavoriteRecipe.mockResolvedValue(buildFavorite());
+    mockedRemoveFavoriteRecipe.mockResolvedValue();
+  });
+
+  it('loads and renders cookbook recipes', async () => {
+    mockedListRecipes.mockResolvedValue([buildRecipe(), buildRecipe({ recipeId: 'rec_2', name: 'Taco Bowls' })]);
+    mockedListFavoriteRecipes.mockResolvedValue([buildFavorite()]);
+
+    render(<CookbookPage />);
+
+    expect(await screen.findByText('Veggie Stir Fry')).toBeInTheDocument();
+    expect(screen.getByText('Taco Bowls')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Favorited' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Favorite' })).toBeInTheDocument();
+  });
+
+  it('filters recipes by search and category', async () => {
+    mockedListRecipes.mockResolvedValue([
+      buildRecipe({ recipeId: 'rec_1', name: 'Veggie Stir Fry', category: 'dinner' }),
+      buildRecipe({ recipeId: 'rec_2', name: 'Berry Parfait', category: 'breakfast', ingredients: [{ name: 'Yogurt' }] })
+    ]);
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+
+    render(<CookbookPage />);
+
+    await screen.findByText('Veggie Stir Fry');
+
+    fireEvent.change(screen.getByLabelText('Search recipes'), { target: { value: 'berry' } });
+
+    expect(screen.queryByText('Veggie Stir Fry')).not.toBeInTheDocument();
+    expect(screen.getByText('Berry Parfait')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Filter by category'), { target: { value: 'dinner' } });
+
+    expect(screen.getByText('No recipes match your current filters.')).toBeInTheDocument();
+  });
+
+  it('adds and removes favorites', async () => {
+    mockedListRecipes.mockResolvedValue([buildRecipe()]);
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+
+    render(<CookbookPage />);
+
+    await screen.findByText('Veggie Stir Fry');
+    fireEvent.click(screen.getByRole('button', { name: 'Favorite' }));
+
+    await waitFor(() => {
+      expect(mockedAddFavoriteRecipe).toHaveBeenCalledWith('rec_1', {});
+    });
+
+    expect(screen.getByRole('button', { name: 'Favorited' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Favorited' }));
+
+    await waitFor(() => {
+      expect(mockedRemoveFavoriteRecipe).toHaveBeenCalledWith('rec_1');
+    });
+
+    expect(screen.getByRole('button', { name: 'Favorite' })).toBeInTheDocument();
+  });
+
+  it('shows api detail when load fails', async () => {
+    mockedListRecipes.mockRejectedValue(
+      new ApiError(403, 'Forbidden', {
+        title: 'Forbidden',
+        detail: 'Recipe access denied.'
+      })
+    );
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+
+    render(<CookbookPage />);
+
+    expect(await screen.findByText('Recipe access denied.')).toBeInTheDocument();
+  });
+});

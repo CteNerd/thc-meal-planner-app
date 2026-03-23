@@ -2,6 +2,7 @@ using Amazon.Lambda.AspNetCoreServer.Hosting;
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
 using ThcMealPlanner.Api.Profiles;
+using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Infrastructure;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -11,9 +12,13 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 builder.Services.AddCognitoAuthentication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();
+builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IValidator<UpdateProfileRequest>, UpdateProfileRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateDependentRequest>, CreateDependentRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateDependentRequest>, UpdateDependentRequestValidator>();
+builder.Services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
+builder.Services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
+builder.Services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -49,6 +54,7 @@ authenticatedApi.MapGet("/session", (HttpContext httpContext) =>
 
 authenticatedApi.MapProfileEndpoints();
 authenticatedApi.MapDependentEndpoints();
+authenticatedApi.MapRecipeEndpoints();
 
 app.Run();
 
