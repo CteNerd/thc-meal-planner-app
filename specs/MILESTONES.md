@@ -6,6 +6,29 @@
 
 > **Implementation Verification Policy**: All data from these specs (profiles, recipes, constraints) is DRAFT. Agents must verify each data record with the user before committing to code or database. See [README.md](README.md) § Implementation Verification Policy.
 
+## Parallel Execution Model (Mac Mini + Codespaces)
+
+Use two coordinated lanes to increase throughput while avoiding overlap:
+
+- **Mac Mini lane**: AWS credentialed and deployment-heavy tasks (CDK deploys, migrations, integration verification).
+- **Codespaces lane**: feature implementation, unit tests, and non-deploy development tasks.
+
+Branching strategy for all remaining phases:
+
+1. Create short-lived task branches from `main` using owner + phase prefixes:
+  - `mac/p2-1-datastack`
+  - `cs/p2-2-dynamodb-repository`
+2. Open PRs early with draft status; include labels `phase:X` and `lane:mac` or `lane:codespaces`.
+3. Rebase task branches on `main` before requesting review.
+4. Merge smallest safe increments first (infrastructure contracts before dependent app code).
+5. Reserve a phase integration branch only when needed for coordinated testing (example: `phase2/integration`).
+
+Sync policy for both lanes:
+
+- Check in at least once per day and after every merged PR.
+- Update the current phase checklist with status, owner, and blockers.
+- Announce any contract changes (API shape, table keys/indexes, env vars) before merge.
+
 ---
 
 ## Phase 0: Copilot Agent Setup
@@ -34,6 +57,13 @@
 - Copilot coding agent can pick up a test issue
 - Spec documents accessible to agents in the repo
 
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | Final validation and any local environment checks for agent behavior |
+| Codespaces | Agent/instruction/skill file authoring and docs maintenance |
+
 ---
 
 ## Phase 1: Foundation
@@ -59,6 +89,13 @@
 - CI pipeline passes: build, test, lint
 - Copilot coding agent can pick up issues
 
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | AWS deploy verification, Cognito user setup/validation, environment troubleshooting |
+| Codespaces | App scaffolding, auth UI/API implementation, CI workflow code and tests |
+
 ---
 
 ## Phase 2: Data Layer & Profiles
@@ -78,12 +115,34 @@
 | 2.7 | Family-scoped authorization | Service layer enforces familyId on all queries |
 | 2.8 | SecretsStack deployment | OpenAI API key in Secrets Manager |
 
+### Recommended Ownership (Parallel Lanes)
+
+| Item | Primary Owner Lane | Secondary / Support | Notes |
+|---|---|---|---|
+| 2.1 | Mac Mini | Codespaces (review CDK diffs) | Deploy and verify real AWS resources |
+| 2.2 | Codespaces | Mac Mini (integration verification) | Ship repository abstractions + tests first |
+| 2.3 | Codespaces | Mac Mini (auth/integration smoke test) | Profile endpoints with validators and Problem Details |
+| 2.4 | Codespaces | Mac Mini (integration verification) | Dependent CRUD + family scope checks |
+| 2.5 | Codespaces | Mac Mini (auth/session validation in deployed env) | UI and API wiring |
+| 2.6 | Mac Mini | Codespaces (script/test support) | Requires explicit data confirmation before commit/deploy |
+| 2.7 | Codespaces | Mac Mini (runtime enforcement checks) | Implement guardrails in services/repositories |
+| 2.8 | Mac Mini | Codespaces (consumer wiring) | Secrets Manager deployment and env contract |
+
+Tracking doc: [PHASE2_CHECKLIST.md](PHASE2_CHECKLIST.md)
+
 ### Milestone Criteria
 - Both user profiles load correctly after login
 - Dependent profiles (Child 1, Child 2) visible in family management UI
 - Profile edits persist to DynamoDB
 - Migration script validates all data correctly (4 profiles total)
 - Adult 1 has no severe allergies; Adult 2 has severe food allergy (anaphylaxis-level)
+
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | DataStack + SecretsStack deploys, migration execution, AWS integration validation |
+| Codespaces | Data layer, profile/dependent APIs, profile UI, family-scope authz and tests |
 
 ---
 
@@ -110,6 +169,13 @@
 - Favorites toggle works for both users
 - URL import produces parseable recipe structure
 
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | S3/image infra verification, migration execution, end-to-end cloud checks |
+| Codespaces | Recipe CRUD APIs, cookbook UI, favorites, URL import parsing and tests |
+
 ---
 
 ## Phase 4: Meal Planning & Constraints
@@ -133,6 +199,13 @@
 - No allergen-containing recipes for Adult 2; no prohibited ingredients for Adult 1
 - Wednesday no-cook nights enforced
 - Quality score calculated and displayed
+
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | Runtime prompt/config verification in deployed environment, integration smoke tests |
+| Codespaces | Constraint engine, planning APIs, weekly UI, nutrition/quality scoring and tests |
 
 ---
 
@@ -164,6 +237,13 @@
 - Pantry staples auto-flagged as in-stock on new grocery lists
 - In-stock items visually distinguished and excluded from shopping count
 
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | Multi-user real-time verification and cloud behavior checks under real auth sessions |
+| Codespaces | Grocery APIs, optimistic concurrency logic, polling, pantry/in-stock UX and tests |
+
 ---
 
 ## Phase 6: AI Chatbot
@@ -188,6 +268,13 @@
 - Chatbot respects allergy constraints in all suggestions
 - Destructive actions require confirmation
 - 30-day history accessible and auto-deleted
+
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | Secrets and environment verification for OpenAI integration; production-like behavioral checks |
+| Codespaces | Chat APIs, function-calling orchestration, chat UI, safety guardrails and tests |
 
 ---
 
@@ -216,6 +303,13 @@
 - 80% code coverage across .NET and React
 - Playwright E2E suite passes
 - Production deployment live and stable
+
+### Ownership Guidance (Parallel Lanes)
+
+| Lane | Recommended Scope |
+|---|---|
+| Mac Mini | Production deploy orchestration, domain/budget/security rollout, final go-live verification |
+| Codespaces | PWA/responsive polish, dashboard, test coverage improvements, Playwright authoring |
 
 ---
 
