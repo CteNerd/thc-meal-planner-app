@@ -103,6 +103,42 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
     }
 
     [Fact]
+    public async Task PostDependent_WithInvalidNestedPayload_ReturnsNestedValidationErrors()
+    {
+        var repository = new InMemoryDependentRepository();
+        var client = CreateAuthenticatedClient(repository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/family/dependents",
+            new CreateDependentRequest
+            {
+                Name = "Child Nested",
+                Allergies =
+                [
+                    new AllergyModel
+                    {
+                        Allergen = string.Empty,
+                        Severity = string.Empty
+                    }
+                ],
+                MacroTargets = new MacroTargetsModel
+                {
+                    Calories = -1
+                }
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Title.Should().Be("One or more validation errors occurred.");
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("Allergies[0].Allergen");
+        problem.Errors.Should().ContainKey("Allergies[0].Severity");
+        problem.Errors.Should().ContainKey("MacroTargets.Calories");
+    }
+
+    [Fact]
     public async Task PutDependent_OutsideFamily_ReturnsNotFound()
     {
         var repository = new InMemoryDependentRepository();
@@ -267,6 +303,64 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
         var client = CreateMissingClaimsClient(repository);
 
         var response = await client.GetAsync("/api/family/dependents");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
+    }
+
+    [Fact]
+    public async Task PutDependent_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var repository = new InMemoryDependentRepository();
+        var client = CreateMissingClaimsClient(repository);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/family/dependents/dep_any",
+            new UpdateDependentRequest
+            {
+                Name = "Updated"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
+    }
+
+    [Fact]
+    public async Task PostDependent_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var repository = new InMemoryDependentRepository();
+        var client = CreateMissingClaimsClient(repository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/family/dependents",
+            new CreateDependentRequest
+            {
+                Name = "Child"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
+    }
+
+    [Fact]
+    public async Task DeleteDependent_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var repository = new InMemoryDependentRepository();
+        var client = CreateMissingClaimsClient(repository);
+
+        var response = await client.DeleteAsync("/api/family/dependents/dep_any");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();

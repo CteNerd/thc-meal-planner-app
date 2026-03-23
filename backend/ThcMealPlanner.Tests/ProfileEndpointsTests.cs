@@ -50,6 +50,26 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
     }
 
     [Fact]
+    public async Task PutProfile_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
+    {
+        var client = CreateMissingClaimsClient(new InMemoryProfileRepository());
+
+        var response = await client.PutAsJsonAsync(
+            "/api/profile",
+            new UpdateProfileRequest
+            {
+                Name = "Adult 1"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.Unauthorized);
+        problem.Title.Should().Be("Unauthorized");
+        problem.Detail.Should().Be("Missing required user claims.");
+    }
+
+    [Fact]
     public async Task PutProfile_WithValidPayload_UpsertsAndReturnsProfile()
     {
         var client = CreateAuthenticatedClient(new InMemoryProfileRepository());
@@ -131,6 +151,37 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
         problem.Errors!.Should().ContainKey("Role");
         problem.Errors["Role"].Should().ContainSingle();
         problem.Errors["Role"][0].Should().Contain("Role cannot be updated", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PutProfile_WithInvalidAllergy_ReturnsNestedValidationError()
+    {
+        var client = CreateAuthenticatedClient(new InMemoryProfileRepository());
+
+        var response = await client.PutAsJsonAsync(
+            "/api/profile",
+            new UpdateProfileRequest
+            {
+                Allergies =
+                [
+                    new AllergyModel
+                    {
+                        Allergen = string.Empty,
+                        Severity = "moderate"
+                    }
+                ]
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Title.Should().Be("One or more validation errors occurred.");
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("Allergies[0].Allergen");
+        problem.Errors["Allergies[0].Allergen"]
+            .Should()
+            .Contain(message => message.Contains("must not be empty", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
