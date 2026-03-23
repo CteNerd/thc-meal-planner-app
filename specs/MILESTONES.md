@@ -129,6 +129,7 @@ Sync policy for both lanes:
 | 2.8 | Mac Mini | Codespaces (consumer wiring) | Secrets Manager deployment and env contract |
 
 Tracking doc: [PHASE2_CHECKLIST.md](PHASE2_CHECKLIST.md)
+Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 
 ### Milestone Criteria
 - Both user profiles load correctly after login
