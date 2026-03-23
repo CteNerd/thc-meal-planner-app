@@ -1,0 +1,89 @@
+[
+  {
+    "PK": "USER#{{ADULT_1_COGNITO_SUB}}",
+    "SK": "PROFILE",
+    "name": "Adult 1",
+    "email": "<adult-1-email>",
+    "familyId": "FAM#<family-id>",
+    "role": "head_of_household",
+    "dietaryPrefs": ["vegetarian"],
+    "allergies": [],
+    "excludedIngredients": ["mushrooms", "all meat and poultry", "seafood"],
+    "macroTargets": {
+      "calories": 2200,
+      "protein": 80,
+      "carbohydrates": 275,
+      "fat": 73,
+      "fiber": 30,
+      "sodium": null
+    },
+    "defaultServings": 2,
+    "createdAt": "2026-01-20T00:00:00Z",
+    "updatedAt": "2026-01-20T00:00:00Z"
+  },
+  {
+    "PK": "USER#{{ADULT_2_COGNITO_SUB}}",
+    "SK": "PROFILE",
+    "name": "Adult 2",
+    "email": "<adult-2-email>",
+    "familyId": "FAM#<family-id>",
+    "role": "head_of_household",
+    "dietaryPrefs": ["gluten-free", "low-sodium"],
+    "allergies": [
+      {
+        "allergen": "tree nuts",
+        "severity": "severe",
+        "reaction": "anaphylaxis",
+        "crossContamination": true
+      },
+      {
+        "allergen": "peanuts",
+        "severity": "precautionary",
+        "reaction": null,
+        "crossContamination": true
+      }
+    ],
+    "excludedIngredients": ["all tree nuts", "wheat", "barley", "rye", "malt", "peanuts"],
+    "macroTargets": {
+      "calories": 1800,
+      "protein": 90,
+      "carbohydrates": 180,
+      "fat": 60,
+      "fiber": null,
+      "sodium": 1500
+    },
+    "defaultServings": 4,
+    "createdAt": "2026-01-20T00:00:00Z",
+    "updatedAt": "2026-01-20T00:00:00Z"
+  },
+  {
+    "PK": "FAMILY#<family-id>",
+    "SK": "DEPENDENT#child-1",
+    "name": "Child 1",
+    "familyId": "FAM#<family-id>",
+    "role": "dependent",
+    "dietaryPrefs": [],
+    "allergies": [],
+    "macroTargets": {
+      "calories": 1200,
+      "protein": 20
+    },
+    "createdAt": "2026-01-20T00:00:00Z",
+    "updatedAt": "2026-01-20T00:00:00Z"
+  },
+  {
+    "PK": "FAMILY#<family-id>",
+    "SK": "DEPENDENT#child-2",
+    "name": "Child 2",
+    "familyId": "FAM#<family-id>",
+    "role": "dependent",
+    "dietaryPrefs": [],
+    "allergies": [],
+    "macroTargets": {
+      "calories": 1400,
+      "protein": 25
+    },
+    "createdAt": "2026-01-20T00:00:00Z",
+    "updatedAt": "2026-01-20T00:00:00Z"
+  }
+]

@@ -40,7 +40,6 @@ Check-in template:
 
 - Lane: Codespaces
 - Task: 2.2
-- Branch: `cs/p2-2-dynamodb-data-layer`
 - Status: Done
 - Contracts touched: Backend DI registration for DynamoDB repository, `DynamoDb` app config section, document-type to table-name mapping contract
 - Blockers or handoff requests: None.
@@ -49,7 +48,6 @@ Check-in template:
 
 - Lane: Codespaces
 - Task: 2.3
-- Branch: `cs/p2-3-profile-api`
 - Status: In Progress
 - Contracts touched: Added `GET`/`PUT /api/profile`, merge-semantics upsert behavior, FluentValidation request contract, profile key contract (`PK=USER#{sub}`, `SK=PROFILE`)
 - Blockers or handoff requests: Align API `DynamoDb` config with deployed contract (`PK`/`SK` key attributes + concrete Users table name mapping).
@@ -58,10 +56,17 @@ Check-in template:
 
 - Lane: Codespaces
 - Task: 2.2, 2.3, sync with `main`
-- Branch: `cs/p2-3-profile-api`
 - Status: Blocked (local git sync execution unavailable in current Codespaces session)
 - Contracts touched: No new contracts; operational handoff for rebase/conflict resolution and DataStack output validation
 - Blockers or handoff requests: Mac lane please run fetch/rebase from `main`, resolve conflicts if any, and report back final values for Users table name + key attribute casing used by deployed DataStack.
+
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.6 prep
+- Status: In Progress
+- Contracts touched: Added migration console scaffold (`backend/ThcMealPlanner.Migration`) with dry-run/execute modes and users-table write path (`PK`/`SK` keys to `thc-meal-planner-dev-users`)
+- Blockers or handoff requests: Awaiting explicit user confirmation of the 4 profile records before committing/running migration payload writes.
 
 ### 2026-03-23 - Codespaces lane
 
