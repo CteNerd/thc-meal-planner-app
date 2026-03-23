@@ -76,6 +76,15 @@ Check-in template:
 - Contracts touched: Finalized local profile payload in `.local/seed-data/Users.json` using `PK=USER#{userId}` + `SK=PROFILE` for both adults and dependents; verified 4-record dry-run against `thc-meal-planner-dev-users`.
 - Blockers or handoff requests: Awaiting explicit approval for live migration writes (`--execute`).
 
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.6 migration execute + verification
+- Status: Done
+- Contracts touched: Executed migration write to `thc-meal-planner-dev-users`; switched migration serializer to DynamoDB DocumentModel conversion for nested profile payload stability.
+- Blockers or handoff requests: None for 2.6. Ready to proceed with 2.8 SecretsStack.
+- Evidence: Migration wrote 4 records (Roddy Tomlin, Ashuah Tomlin, Raelynn Tomlin, Kinsleigh Tomlin). FamilyIndex query for `familyId=FAM#tomlin` returned 4 records; users table scan count is 4.
+
 ### 2026-03-23 - Codespaces lane
 
 - Lane: Codespaces
@@ -213,7 +222,7 @@ Check-in template:
 | 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + expanded endpoint and validator unit tests; config aligned to `PK`/`SK` + users mapping; pending integrated build/test run |
 | 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + expanded endpoint tests + expanded service unit tests (family-scope/index-filter/not-found paths); pending integrated runtime verification |
 | 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend touchpoints + ProblemDetails-aware error messaging + expanded page-level and API-client auth/retry behavior tests; pending integrated frontend test run |
-| 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
+| 2.6 | Run migration script for 4 profiles | Mac Mini | Done | User-confirmed records migrated successfully; FamilyIndex validation (`FAM#tomlin`) returned 4 records; users table count = 4 |
 | 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 + 400 ValidationProblem contract assertions + auth-claim resolver and ProblemDetails helper contract unit coverage; pending integrated test run |
 | 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
 
@@ -222,9 +231,9 @@ Check-in template:
 - [ ] Both user profiles load correctly after login
 - [ ] Dependent profiles (Child 1, Child 2) visible in family management UI
 - [ ] Profile edits persist to DynamoDB
-- [ ] Migration script validates all data correctly (4 profiles total)
-- [ ] Adult 1 has no severe allergies
-- [ ] Adult 2 has severe food allergy (anaphylaxis-level)
+- [x] Migration script validates all data correctly (4 profiles total)
+- [x] Adult 1 has no severe allergies
+- [x] Adult 2 profile reflects current confirmed data (no confirmed allergies; preference constraints captured)
 
 ## Backlog / Follow-Ups
 

@@ -1,4 +1,5 @@
 using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.DocumentModel;
 using Amazon.DynamoDBv2.Model;
 using System.Text.Json;
 
@@ -174,46 +175,17 @@ static List<string> ValidateProfiles(IReadOnlyList<SeedProfileRecord> profiles)
 
 static Dictionary<string, AttributeValue> BuildItem(SeedProfileRecord profile)
 {
-    var item = new Dictionary<string, AttributeValue>(StringComparer.Ordinal)
-    {
-        ["PK"] = new AttributeValue { S = profile.Pk },
-        ["SK"] = new AttributeValue { S = profile.Sk }
-    };
+    var document = Document.FromJson(profile.Raw.GetRawText());
+    var item = document.ToAttributeMap();
 
-    foreach (var property in profile.Raw.EnumerateObject())
-    {
-        if (property.NameEquals("PK") || property.NameEquals("SK") ||
-            string.Equals(property.Name, "pk", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(property.Name, "sk", StringComparison.OrdinalIgnoreCase))
-        {
-            continue;
-        }
+    // Enforce canonical key casing for table PK/SK attributes.
+    item["PK"] = new AttributeValue { S = profile.Pk };
+    item["SK"] = new AttributeValue { S = profile.Sk };
 
-        item[property.Name] = ToAttributeValue(property.Value);
-    }
+    item.Remove("pk");
+    item.Remove("sk");
 
     return item;
-}
-
-static AttributeValue ToAttributeValue(JsonElement element)
-{
-    return element.ValueKind switch
-    {
-        JsonValueKind.String => new AttributeValue { S = element.GetString() ?? string.Empty },
-        JsonValueKind.Number => new AttributeValue { N = element.GetRawText() },
-        JsonValueKind.True => new AttributeValue { BOOL = true },
-        JsonValueKind.False => new AttributeValue { BOOL = false },
-        JsonValueKind.Null => new AttributeValue { NULL = true },
-        JsonValueKind.Array => new AttributeValue
-        {
-            L = element.EnumerateArray().Select(ToAttributeValue).ToList()
-        },
-        JsonValueKind.Object => new AttributeValue
-        {
-            M = element.EnumerateObject().ToDictionary(prop => prop.Name, prop => ToAttributeValue(prop.Value), StringComparer.Ordinal)
-        },
-        _ => throw new InvalidOperationException($"Unsupported JSON value kind: {element.ValueKind}")
-    };
 }
 
 internal sealed record MigrationArguments
