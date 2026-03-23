@@ -164,17 +164,41 @@ Check-in template:
 - Contracts touched: Added unit coverage for dependent service boundary (`ListByFamilyAsync` index/filter contract, create/update/delete family-scope behavior) plus endpoint tests for nested validation keys and missing-claims unauthorized paths across dependent CRUD operations
 - Blockers or handoff requests: Terminal ENOPRO still blocks integrated `dotnet test` execution and commit commands in this session.
 
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.3, 2.4, 2.7 coverage expansion
+- Status: In Progress
+- Contracts touched: Added dedicated validator unit tests for profile/dependent request contracts (nested property names and constraint messages) and added dependent service tests for not-found update/delete edge paths
+- Blockers or handoff requests: Terminal ENOPRO still blocks integrated test execution and commit commands in this session.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.5 coverage expansion
+- Status: In Progress
+- Contracts touched: Added Profile page component tests for load success, API ProblemDetails error rendering, and dependent add validation/error flows using mocked profile API service calls
+- Blockers or handoff requests: Terminal ENOPRO still blocks integrated frontend test execution and commit commands in this session.
+
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.5, 2.7 coverage expansion
+- Status: In Progress
+- Contracts touched: Added auth claim resolver unit tests (required/fallback/missing claim paths and role semantics) and expanded Profile page interaction tests for save success, dependent create success, and dependent delete API-error rendering
+- Blockers or handoff requests: Terminal ENOPRO still blocks integrated backend/frontend test execution and commit commands in this session.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
 |---|---|---|---|---|
 | 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | Done | AWS validated: 6 tables deployed, all target GSIs ACTIVE, TTL enabled for `mealplans` and `chathistory` (`TTL` attribute); committed to `main` 2026-03-22 |
 | 2.2 | Build DynamoDB data access layer | Codespaces | Done | Core generic repository contract + Infrastructure DynamoDB implementation scaffolded |
-| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + tests added; config aligned to `PK`/`SK` + users mapping; pending integrated build/test run |
-| 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + expanded endpoint tests + new service unit tests for family-scope and index-filter behavior; pending integrated runtime verification |
-| 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend touchpoints + ProblemDetails-aware error messaging + unit test for API error extraction; pending integrated frontend test run |
+| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | In Progress | Profile endpoints + validators + expanded endpoint and validator unit tests; config aligned to `PK`/`SK` + users mapping; pending integrated build/test run |
+| 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + expanded endpoint tests + expanded service unit tests (family-scope/index-filter/not-found paths); pending integrated runtime verification |
+| 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend touchpoints + ProblemDetails-aware error messaging + expanded page-level interaction/error tests; pending integrated frontend test run |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
-| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 + 400 ValidationProblem contract assertions (including nested keys and additional missing-claims paths); pending integrated test run |
+| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 + 400 ValidationProblem contract assertions + auth-claim resolver unit coverage; pending integrated test run |
 | 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
 
 ## Milestone Criteria Tracking

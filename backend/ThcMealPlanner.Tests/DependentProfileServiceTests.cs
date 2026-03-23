@@ -132,6 +132,23 @@ public sealed class DependentProfileServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenDependentMissing_ReturnsNull()
+    {
+        var repository = new RecordingDependentRepository();
+        var service = new DependentProfileService(repository);
+
+        var result = await service.UpdateAsync(
+            "FAM#test",
+            "dep_missing",
+            new UpdateDependentRequest
+            {
+                Name = "Updated"
+            });
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task DeleteAsync_WhenFamilyMismatch_ReturnsFalse()
     {
         var repository = new RecordingDependentRepository();
@@ -178,6 +195,18 @@ public sealed class DependentProfileServiceTests
         deleted.Should().BeTrue();
         repository.DeleteCalls.Should().Be(1);
         repository.StoredDocuments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenDependentMissing_ReturnsFalse()
+    {
+        var repository = new RecordingDependentRepository();
+        var service = new DependentProfileService(repository);
+
+        var deleted = await service.DeleteAsync("FAM#test", "dep_missing");
+
+        deleted.Should().BeFalse();
+        repository.DeleteCalls.Should().Be(0);
     }
 
     private sealed class RecordingDependentRepository : IDynamoDbRepository<DependentProfileDocument>
