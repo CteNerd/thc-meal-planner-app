@@ -11,4 +11,6 @@ public sealed class ApiProblemDetails
     public string? Detail { get; init; }
 
     public string? Instance { get; init; }
+
+    public Dictionary<string, string[]>? Errors { get; init; }
 }

@@ -97,10 +97,17 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
         };
 
         var response = await client.PutAsJsonAsync("/api/profile", request);
-        var body = await response.Content.ReadAsStringAsync();
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        body.Should().Contain("MacroTargets.Calories");
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Title.Should().Be("One or more validation errors occurred.");
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("MacroTargets.Calories");
+        problem.Errors["MacroTargets.Calories"]
+            .Should()
+            .Contain(message => message.Contains("greater than '0'", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -116,8 +123,14 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("Role cannot be updated");
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Title.Should().Be("One or more validation errors occurred.");
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("Role");
+        problem.Errors["Role"].Should().ContainSingle();
+        problem.Errors["Role"][0].Should().Contain("Role cannot be updated", StringComparison.Ordinal);
     }
 
     [Fact]

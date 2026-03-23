@@ -80,6 +80,29 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
     }
 
     [Fact]
+    public async Task PostDependent_WithInvalidPayload_ReturnsBadRequestValidationProblem()
+    {
+        var repository = new InMemoryDependentRepository();
+        var client = CreateAuthenticatedClient(repository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/family/dependents",
+            new CreateDependentRequest
+            {
+                Name = string.Empty
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Title.Should().Be("One or more validation errors occurred.");
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("Name");
+        problem.Errors["Name"].Should().Contain(message => message.Contains("must not be empty", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task PutDependent_OutsideFamily_ReturnsNotFound()
     {
         var repository = new InMemoryDependentRepository();
@@ -107,6 +130,41 @@ public sealed class DependentEndpointsTests : IClassFixture<WebApplicationFactor
         problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
         problem.Title.Should().Be("Dependent not found");
         problem.Detail.Should().Be("No dependent exists for the requested user id within this family.");
+    }
+
+    [Fact]
+    public async Task PutDependent_WithInvalidPayload_ReturnsBadRequestValidationProblem()
+    {
+        var repository = new InMemoryDependentRepository();
+        await repository.PutAsync(
+            new DynamoDbKey("USER#dep_invalid", "PROFILE"),
+            new DependentProfileDocument
+            {
+                UserId = "dep_invalid",
+                Name = "Child Invalid",
+                FamilyId = "FAM#test-family",
+                Role = "dependent",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(repository);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/family/dependents/dep_invalid",
+            new UpdateDependentRequest
+            {
+                Name = new string('x', 101)
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        problem.Title.Should().Be("One or more validation errors occurred.");
+        problem.Errors.Should().NotBeNull();
+        problem.Errors!.Should().ContainKey("Name");
+        problem.Errors["Name"].Should().Contain(message => message.Contains("100", StringComparison.Ordinal));
     }
 
     [Fact]

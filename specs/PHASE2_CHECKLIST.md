@@ -143,6 +143,14 @@ Check-in template:
 - Contracts touched: Frontend API error handling now extracts ProblemDetails `detail`/`title`/validation errors for Profile page actions; added focused unit test coverage for API error-message extraction behavior
 - Blockers or handoff requests: Local terminal ENOPRO still blocks integrated frontend test execution in this session.
 
+### 2026-03-23 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 2.7 validation-contract hardening (option 1)
+- Status: In Progress
+- Contracts touched: Endpoint tests now assert ValidationProblem shape for 400 responses (`status`, `title`, `errors`) for profile and dependent create/update invalid payload paths
+- Blockers or handoff requests: Local terminal ENOPRO still blocks integrated backend test execution and commit commands in this session.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / PR / Notes |
@@ -153,7 +161,7 @@ Check-in template:
 | 2.4 | CRUD `/api/family/dependents` | Codespaces | In Progress | API endpoint scaffold + validators + endpoint tests added; member-role denial tests expanded, pending integrated runtime verification |
 | 2.5 | Profile UI and API integration | Codespaces | In Progress | Frontend touchpoints + ProblemDetails-aware error messaging + unit test for API error extraction; pending integrated frontend test run |
 | 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
-| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 ProblemDetails + contract assertions in endpoint tests; pending integrated test run |
+| 2.7 | Family-scoped authorization enforcement | Codespaces | In Progress | Service boundary + standardized 401/403/404 + 400 ValidationProblem contract assertions in endpoint tests; pending integrated test run |
 | 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
 
 ## Milestone Criteria Tracking
