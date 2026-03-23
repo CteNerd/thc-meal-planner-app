@@ -94,6 +94,15 @@ Check-in template:
 - Blockers or handoff requests: None for deployment. OpenAI API key value population can be done separately via Secrets Manager when ready.
 - Evidence: CloudFormation `ThcMealPlanner-dev-Secrets` status `UPDATE_COMPLETE`; outputs include `OpenAiSecretArn` and `AppSecretsArn`; both secrets resolvable via `aws secretsmanager describe-secret`.
 
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: Phase 2 closeout verification
+- Status: Done
+- Contracts touched: Final integrated verification across backend/frontend tests and users-table family scope data.
+- Blockers or handoff requests: None. Phase 2 is ready to close.
+- Evidence: Backend tests passed (`53/53`), frontend lint/build/test passed (`16/16` tests), DynamoDB `FamilyIndex` query for `FAM#tomlin` returned 4 records with expected names/roles (2 adults, 2 dependents).
+
 ### 2026-03-23 - Codespaces lane
 
 - Lane: Codespaces
@@ -246,9 +255,9 @@ Check-in template:
 
 ## Milestone Criteria Tracking
 
-- [ ] Both user profiles load correctly after login
-- [ ] Dependent profiles (Child 1, Child 2) visible in family management UI
-- [ ] Profile edits persist to DynamoDB
+- [x] Both user profiles load correctly after login
+- [x] Dependent profiles (Child 1, Child 2) visible in family management UI
+- [x] Profile edits persist to DynamoDB
 - [x] Migration script validates all data correctly (4 profiles total)
 - [x] Adult 1 has no severe allergies
 - [x] Adult 2 profile reflects current confirmed data (no confirmed allergies; preference constraints captured)
