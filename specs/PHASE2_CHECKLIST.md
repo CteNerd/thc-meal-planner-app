@@ -1,0 +1,81 @@
+# Phase 2 Checklist and Backlog
+
+Living tracker for data layer and profile work with explicit parallel ownership across Mac Mini and Codespaces.
+
+## Parallel Lanes
+
+- **Mac Mini lane**: AWS deploys, environment verification, migration execution.
+- **Codespaces lane**: backend/frontend feature code, tests, and PR preparation.
+
+## Branching Strategy (Phase 2)
+
+1. Start every task from `main`.
+2. Use owner-prefixed branch names:
+   - `mac/p2-1-datastack`
+   - `mac/p2-6-profile-migration`
+   - `mac/p2-8-secrets-stack`
+   - `cs/p2-2-dynamodb-data-layer`
+   - `cs/p2-3-profile-api`
+   - `cs/p2-4-dependents-api`
+   - `cs/p2-5-profile-ui`
+   - `cs/p2-7-family-scope-authz`
+3. Open draft PRs as soon as the contract is stable.
+4. Use labels on PRs/issues:
+   - `phase:2`
+   - `lane:mac` or `lane:codespaces`
+   - `area:backend`, `area:frontend`, or `area:infra`
+5. Rebase from `main` before merge.
+6. Use `phase2/integration` only when coordinated cross-lane validation is needed.
+
+## Check-In Protocol (Both Brains)
+
+Update this file at least daily and after each merged PR.
+
+Check-in template:
+
+- Lane: Mac Mini or Codespaces
+- Task: Milestone item number(s)
+- Branch: branch name
+- Status: In Progress / Blocked / Ready for Review / Done
+- Contracts touched: API routes, data model keys/indexes, env vars, auth assumptions
+- Blockers or handoff requests
+
+## Check-In Log
+
+### 2026-03-22 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 2.1
+- Branch: `mac/p2-1-datastack`
+- Status: In Progress
+- Contracts touched: DynamoDB GSIs (`FamilyIndex`, `StatusIndex`, `CategoryIndex`, `CuisineIndex`)
+- Blockers or handoff requests: Codespaces lane can begin 2.2 using these index names as current contract.
+
+## Status Board
+
+| Item | Description | Primary Owner | Status | Evidence / PR / Notes |
+|---|---|---|---|---|
+| 2.1 | Deploy DataStack (6 tables, GSIs, TTL) | Mac Mini | In Progress | CDK updated with Users `FamilyIndex`, MealPlans `StatusIndex`, Recipes `CategoryIndex` + `CuisineIndex`; `npm run build` + `npm run synth` pass |
+| 2.2 | Build DynamoDB data access layer | Codespaces | Not Started | |
+| 2.3 | GET/PUT `/api/profile` + FluentValidation | Codespaces | Not Started | |
+| 2.4 | CRUD `/api/family/dependents` | Codespaces | Not Started | |
+| 2.5 | Profile UI and API integration | Codespaces | Not Started | |
+| 2.6 | Run migration script for 4 profiles | Mac Mini | Not Started | Requires explicit user confirmation for records before commit/deploy |
+| 2.7 | Family-scoped authorization enforcement | Codespaces | Not Started | |
+| 2.8 | Deploy SecretsStack (OpenAI key) | Mac Mini | Not Started | |
+
+## Milestone Criteria Tracking
+
+- [ ] Both user profiles load correctly after login
+- [ ] Dependent profiles (Child 1, Child 2) visible in family management UI
+- [ ] Profile edits persist to DynamoDB
+- [ ] Migration script validates all data correctly (4 profiles total)
+- [ ] Adult 1 has no severe allergies
+- [ ] Adult 2 has severe food allergy (anaphylaxis-level)
+
+## Backlog / Follow-Ups
+
+1. Define DynamoDB key schema contract in code comments or ADR before repository implementation is merged.
+2. Add integration tests for familyId enforcement at repository/service boundaries.
+3. Add UI test coverage for profile save and dependents CRUD happy path + validation errors.
+4. Confirm migration payload records with user before committing migration data or scripts.

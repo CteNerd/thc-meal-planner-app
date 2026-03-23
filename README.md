@@ -14,6 +14,8 @@ See [specs/](specs/) for full project specifications.
 | [specs/MILESTONES.md](specs/MILESTONES.md) | 8-phase delivery plan (start with Phase 0) |
 | [specs/PHASE0_CHECKLIST.md](specs/PHASE0_CHECKLIST.md) | Living Phase 0 setup and verification checklist |
 | [specs/PHASE1_CHECKLIST.md](specs/PHASE1_CHECKLIST.md) | Living Phase 1 foundation checklist |
+| [specs/PHASE2_CHECKLIST.md](specs/PHASE2_CHECKLIST.md) | Living Phase 2 parallel execution checklist and ownership lanes |
+| [specs/PHASE2_CODESPACES_KICKOFF.md](specs/PHASE2_CODESPACES_KICKOFF.md) | Codespaces kickoff packet for Phase 2 workstream |
 | [specs/COPILOT_CONFIG.md](specs/COPILOT_CONFIG.md) | Agent, instruction, and skill configuration |
 
 ## Implementation Verification Policy
