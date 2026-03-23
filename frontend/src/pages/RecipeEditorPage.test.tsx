@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -59,6 +60,17 @@ function buildDraft(overrides?: Partial<ImportedRecipeDraft>): ImportedRecipeDra
   };
 }
 
+function renderRecipeEditorPage(initialEntry = '/cookbook/new') {
+  render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/cookbook/new" element={<RecipeEditorPage />} />
+        <Route path="/cookbook/:recipeId/edit" element={<RecipeEditorPage />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
 describe('RecipeEditorPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -75,15 +87,11 @@ describe('RecipeEditorPage', () => {
   it('imports a draft from URL into the form', async () => {
     mockedImportRecipeFromUrl.mockResolvedValue(buildDraft());
 
-    render(
-      <MemoryRouter initialEntries={['/cookbook/new']}>
-        <Routes>
-          <Route path="/cookbook/new" element={<RecipeEditorPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderRecipeEditorPage();
 
-    fireEvent.change(screen.getByLabelText('Recipe import URL'), { target: { value: 'https://example.com/pasta' } });
+    fireEvent.change(screen.getByLabelText('Recipe import URL'), {
+      target: { value: 'https://example.com/pasta' }
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Import draft' }));
 
     await waitFor(() => {
@@ -94,13 +102,7 @@ describe('RecipeEditorPage', () => {
   });
 
   it('creates a recipe from form values', async () => {
-    render(
-      <MemoryRouter initialEntries={['/cookbook/new']}>
-        <Routes>
-          <Route path="/cookbook/new" element={<RecipeEditorPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderRecipeEditorPage();
 
     fireEvent.change(screen.getByLabelText('Recipe name'), { target: { value: 'New Recipe' } });
     fireEvent.change(screen.getByLabelText('Recipe ingredients'), { target: { value: '1|cup|Rice' } });
@@ -121,14 +123,8 @@ describe('RecipeEditorPage', () => {
   it('loads existing recipe when editing', async () => {
     mockedGetRecipe.mockResolvedValue(buildRecipe({ recipeId: 'rec_edit', name: 'Editable Recipe' }));
 
-    render(
-      <MemoryRouter initialEntries={['/cookbook/rec_edit/edit']}>
-        <Routes>
-          <Route path="/cookbook/:recipeId/edit" element={<RecipeEditorPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderRecipeEditorPage('/cookbook/rec_edit/edit');
 
     expect(await screen.findByDisplayValue('Editable Recipe')).toBeInTheDocument();
   });
-}
+});

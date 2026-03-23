@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -6,15 +7,15 @@ import type { FavoriteRecipe, Recipe } from '../types';
 import { addFavoriteRecipe, getRecipe, listFavoriteRecipes, removeFavoriteRecipe } from '../services/recipeApi';
 
 vi.mock('../services/recipeApi', () => ({
+  addFavoriteRecipe: vi.fn(),
   getRecipe: vi.fn(),
   listFavoriteRecipes: vi.fn(),
-  addFavoriteRecipe: vi.fn(),
   removeFavoriteRecipe: vi.fn()
 }));
 
+const mockedAddFavoriteRecipe = vi.mocked(addFavoriteRecipe);
 const mockedGetRecipe = vi.mocked(getRecipe);
 const mockedListFavoriteRecipes = vi.mocked(listFavoriteRecipes);
-const mockedAddFavoriteRecipe = vi.mocked(addFavoriteRecipe);
 const mockedRemoveFavoriteRecipe = vi.mocked(removeFavoriteRecipe);
 
 function buildRecipe(overrides?: Partial<Recipe>): Recipe {
@@ -45,6 +46,16 @@ function buildFavorite(overrides?: Partial<FavoriteRecipe>): FavoriteRecipe {
   };
 }
 
+function renderRecipeDetailPage() {
+  render(
+    <MemoryRouter initialEntries={['/cookbook/rec_1']}>
+      <Routes>
+        <Route path="/cookbook/:recipeId" element={<RecipeDetailPage />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
 describe('RecipeDetailPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -54,13 +65,7 @@ describe('RecipeDetailPage', () => {
     mockedGetRecipe.mockResolvedValue(buildRecipe({ description: 'Fast and easy.' }));
     mockedListFavoriteRecipes.mockResolvedValue([buildFavorite()]);
 
-    render(
-      <MemoryRouter initialEntries={['/cookbook/rec_1']}>
-        <Routes>
-          <Route path="/cookbook/:recipeId" element={<RecipeDetailPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderRecipeDetailPage();
 
     expect(await screen.findByText('Veggie Stir Fry')).toBeInTheDocument();
     expect(screen.getByText('Fast and easy.')).toBeInTheDocument();
@@ -73,13 +78,7 @@ describe('RecipeDetailPage', () => {
     mockedAddFavoriteRecipe.mockResolvedValue(buildFavorite());
     mockedRemoveFavoriteRecipe.mockResolvedValue();
 
-    render(
-      <MemoryRouter initialEntries={['/cookbook/rec_1']}>
-        <Routes>
-          <Route path="/cookbook/:recipeId" element={<RecipeDetailPage />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    renderRecipeDetailPage();
 
     await screen.findByText('Veggie Stir Fry');
     fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }));
@@ -94,4 +93,4 @@ describe('RecipeDetailPage', () => {
       expect(mockedRemoveFavoriteRecipe).toHaveBeenCalledWith('rec_1');
     });
   });
-}
+});
