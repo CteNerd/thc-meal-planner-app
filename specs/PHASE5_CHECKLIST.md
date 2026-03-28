@@ -7,6 +7,11 @@ Living tracker for grocery list generation, live sync, and optimistic concurrenc
 - Mac Mini lane: multi-user runtime verification in deployed environment, cloud behavior checks for concurrency/polling, and integrated troubleshooting.
 - Codespaces lane: backend/frontend feature implementation, unit tests, and checklist updates.
 
+## Phase Status Summary
+
+- Codespaces implementation status: Complete.
+- Remaining Phase 5 work: Shared/Mac Mini deployed validation for real-session behavior, live multi-user sync, and production-like runtime verification.
+
 ## Check-In Protocol
 
 Update this file after each subphase commit and at least daily.
@@ -65,14 +70,14 @@ Check-in template:
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
-| 5.1 | Grocery list generation API | Codespaces | In Progress | Backend generation endpoint and service landed; frontend generate flow integrated. |
+| 5.1 | Grocery list generation API | Codespaces | Done | Backend generation endpoint and service landed; frontend generate flow integrated and test-covered. |
 | 5.2 | Grocery list UI | Codespaces | Done | Grocery list page now includes grouped list, metrics, manual add/remove, pantry management, and section-flow controls. |
 | 5.3 | Optimistic concurrency | Codespaces | Done | Version checks and 409 recovery paths are implemented and test-covered in backend and frontend. |
 | 5.4 | Activity-based polling | Shared | Done | Backend poll endpoint + frontend visibility-aware 5-second polling implemented and validated locally. |
 | 5.5 | Add/remove items manually | Codespaces | Done | Manual add/remove flows are implemented end-to-end and covered by automated tests. |
 | 5.6 | Completed item TTL cleanup | Codespaces | Done | 7-day application-level cleanup implemented in grocery service read path with local validation. |
 | 5.7 | Store preferences integration | Codespaces | Done | Primary store section ordering implemented via pantry `preferredSectionOrder` and applied to grocery section rendering. |
-| 5.8 | Grocery list reactivity on meal changes | Shared | In Progress | Meal plan create/generate/update/delete now trigger grocery regeneration; deployed verification pending. |
+| 5.8 | Grocery list reactivity on meal changes | Shared | In Progress | Meal plan create/generate/update/delete now trigger grocery regeneration; deployed real-session verification pending. |
 | 5.9 | Pantry staples management | Codespaces | Done | Pantry CRUD API + pantry management UI implemented with tests. |
 | 5.10 | In-stock toggle | Codespaces | Done | Endpoint + UI toggle implemented; to-buy count excludes checked and in-stock items, with tests. |
 
