@@ -20,9 +20,9 @@ public sealed class RecipeDocument
 
     public int? CookTimeMinutes { get; init; }
 
-    public string? ProteinSource { get; init; }
+    public List<string>? ProteinSource { get; init; }
 
-    public string? CookingMethod { get; init; }
+    public List<string>? CookingMethod { get; init; }
 
     public string? Difficulty { get; init; }
 
@@ -99,9 +99,9 @@ public sealed class CreateRecipeRequest
 
     public int? CookTimeMinutes { get; init; }
 
-    public string? ProteinSource { get; init; }
+    public List<string>? ProteinSource { get; init; }
 
-    public string? CookingMethod { get; init; }
+    public List<string>? CookingMethod { get; init; }
 
     public string? Difficulty { get; init; }
 
@@ -142,9 +142,9 @@ public sealed class UpdateRecipeRequest
 
     public int? CookTimeMinutes { get; init; }
 
-    public string? ProteinSource { get; init; }
+    public List<string>? ProteinSource { get; init; }
 
-    public string? CookingMethod { get; init; }
+    public List<string>? CookingMethod { get; init; }
 
     public string? Difficulty { get; init; }
 
@@ -214,9 +214,9 @@ public sealed class ImportedRecipeDraft
 
     public int? CookTimeMinutes { get; init; }
 
-    public string? ProteinSource { get; init; }
+    public List<string>? ProteinSource { get; init; }
 
-    public string? CookingMethod { get; init; }
+    public List<string>? CookingMethod { get; init; }
 
     public string? Difficulty { get; init; }
 

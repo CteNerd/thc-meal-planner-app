@@ -1,5 +1,6 @@
 using Amazon.DynamoDBv2;
 using Amazon.Extensions.NETCore.Setup;
+using Amazon.SecretsManager;
 using Amazon.S3;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddAWSService<IAmazonDynamoDB>();
         services.AddAWSService<IAmazonS3>();
+        services.AddAWSService<IAmazonSecretsManager>();
         services.AddSingleton<IDynamoDbTableNameResolver, DynamoDbTableNameResolver>();
         services.AddScoped(typeof(IDynamoDbRepository<>), typeof(DynamoDbRepository<>));
 

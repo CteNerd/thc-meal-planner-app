@@ -24,12 +24,20 @@ public sealed class CreateRecipeRequestValidator : AbstractValidator<CreateRecip
             .When(x => x.Cuisine is not null);
 
         RuleFor(x => x.ProteinSource)
-            .MaximumLength(100)
-            .When(x => x.ProteinSource is not null);
+            .Must(proteinSources => proteinSources is null || proteinSources.Count > 0)
+            .WithMessage("Protein source cannot be empty when provided.");
+
+        RuleForEach(x => x.ProteinSource)
+            .NotEmpty()
+            .MaximumLength(100);
 
         RuleFor(x => x.CookingMethod)
-            .MaximumLength(100)
-            .When(x => x.CookingMethod is not null);
+            .Must(cookingMethods => cookingMethods is null || cookingMethods.Count > 0)
+            .WithMessage("Cooking method cannot be empty when provided.");
+
+        RuleForEach(x => x.CookingMethod)
+            .NotEmpty()
+            .MaximumLength(100);
 
         RuleFor(x => x.Difficulty)
             .MaximumLength(50)
@@ -131,12 +139,20 @@ public sealed class UpdateRecipeRequestValidator : AbstractValidator<UpdateRecip
             .When(x => x.Cuisine is not null);
 
         RuleFor(x => x.ProteinSource)
-            .MaximumLength(100)
-            .When(x => x.ProteinSource is not null);
+            .Must(proteinSources => proteinSources is null || proteinSources.Count > 0)
+            .WithMessage("Protein source cannot be empty when provided.");
+
+        RuleForEach(x => x.ProteinSource)
+            .NotEmpty()
+            .MaximumLength(100);
 
         RuleFor(x => x.CookingMethod)
-            .MaximumLength(100)
-            .When(x => x.CookingMethod is not null);
+            .Must(cookingMethods => cookingMethods is null || cookingMethods.Count > 0)
+            .WithMessage("Cooking method cannot be empty when provided.");
+
+        RuleForEach(x => x.CookingMethod)
+            .NotEmpty()
+            .MaximumLength(100);
 
         RuleFor(x => x.Difficulty)
             .MaximumLength(50)

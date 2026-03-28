@@ -128,8 +128,8 @@ export function RecipeEditorPage() {
         servings: draft.servings?.toString() ?? '',
         prepTimeMinutes: draft.prepTimeMinutes?.toString() ?? '',
         cookTimeMinutes: draft.cookTimeMinutes?.toString() ?? '',
-        proteinSource: draft.proteinSource ?? '',
-        cookingMethod: draft.cookingMethod ?? '',
+        proteinSource: (draft.proteinSource ?? []).join(', '),
+        cookingMethod: (draft.cookingMethod ?? []).join(', '),
         difficulty: draft.difficulty ?? '',
         tags: draft.tags.join(', '),
         ingredients: formatIngredients(draft.ingredients),
@@ -344,8 +344,8 @@ function toFormState(recipe: Recipe): RecipeFormState {
     servings: recipe.servings?.toString() ?? '',
     prepTimeMinutes: recipe.prepTimeMinutes?.toString() ?? '',
     cookTimeMinutes: recipe.cookTimeMinutes?.toString() ?? '',
-    proteinSource: recipe.proteinSource ?? '',
-    cookingMethod: recipe.cookingMethod ?? '',
+    proteinSource: (recipe.proteinSource ?? []).join(', '),
+    cookingMethod: (recipe.cookingMethod ?? []).join(', '),
     difficulty: recipe.difficulty ?? '',
     tags: recipe.tags.join(', '),
     ingredients: formatIngredients(recipe.ingredients),
@@ -367,8 +367,14 @@ function toPayload(form: RecipeFormState): RecipePayload {
     servings: parseOptionalNumber(form.servings),
     prepTimeMinutes: parseOptionalNumber(form.prepTimeMinutes),
     cookTimeMinutes: parseOptionalNumber(form.cookTimeMinutes),
-    proteinSource: form.proteinSource.trim(),
-    cookingMethod: form.cookingMethod.trim(),
+    proteinSource: form.proteinSource
+      .split(',')
+      .map((protein) => protein.trim())
+      .filter(Boolean),
+    cookingMethod: form.cookingMethod
+      .split(',')
+      .map((method) => method.trim())
+      .filter(Boolean),
     difficulty: form.difficulty.trim(),
     tags: form.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
     ingredients: parseIngredients(form.ingredients),

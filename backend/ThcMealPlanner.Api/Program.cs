@@ -1,6 +1,7 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
+using ThcMealPlanner.Api.MealPlans;
 using ThcMealPlanner.Api.Profiles;
 using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Infrastructure;
@@ -14,7 +15,20 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>();
+builder.Services.AddHttpClient<IMealPlanAiService, MealPlanAiService>();
 builder.Services.AddScoped<IRecipeImageUploadService, RecipeImageUploadService>();
+builder.Services.Configure<OpenAiOptions>(options =>
+{
+    builder.Configuration.GetSection(OpenAiOptions.SectionName).Bind(options);
+    options.SecretArn = builder.Configuration["OPENAI_SECRET_ARN"] ?? options.SecretArn;
+});
+builder.Services.AddScoped<IOpenAiApiKeyProvider, OpenAiApiKeyProvider>();
+builder.Services.Configure<ConstraintConfig>(builder.Configuration.GetSection(ConstraintConfig.SectionName));
+builder.Services.AddScoped<IConstraintEngine, ConstraintEngine>();
+builder.Services.AddScoped<IMealPlanService, MealPlanService>();
+builder.Services.AddScoped<IValidator<CreateMealPlanRequest>, CreateMealPlanRequestValidator>();
+builder.Services.AddScoped<IValidator<UpdateMealPlanRequest>, UpdateMealPlanRequestValidator>();
+builder.Services.AddScoped<IValidator<GenerateMealPlanRequest>, GenerateMealPlanRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateProfileRequest>, UpdateProfileRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateDependentRequest>, CreateDependentRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateDependentRequest>, UpdateDependentRequestValidator>();
@@ -59,6 +73,7 @@ authenticatedApi.MapGet("/session", (HttpContext httpContext) =>
 authenticatedApi.MapProfileEndpoints();
 authenticatedApi.MapDependentEndpoints();
 authenticatedApi.MapRecipeEndpoints();
+authenticatedApi.MapMealPlanEndpoints();
 
 app.Run();
 

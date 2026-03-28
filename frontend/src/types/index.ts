@@ -115,8 +115,8 @@ export type Recipe = {
   servings?: number;
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;
-  proteinSource?: string;
-  cookingMethod?: string;
+  proteinSource?: string[];
+  cookingMethod?: string[];
   difficulty?: string;
   tags: string[];
   ingredients: RecipeIngredient[];
@@ -141,8 +141,8 @@ export type RecipePayload = {
   servings?: number;
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;
-  proteinSource?: string;
-  cookingMethod?: string;
+  proteinSource?: string[];
+  cookingMethod?: string[];
   difficulty?: string;
   tags: string[];
   ingredients: RecipeIngredient[];
@@ -177,6 +177,90 @@ export type RecipeUploadUrlResponse = {
   uploadUrl: string;
   imageKey: string;
   imageUrl: string;
+};
+
+export type MealNutritionalInfo = {
+  calories?: number;
+  protein?: number;
+  carbohydrates?: number;
+  fat?: number;
+  sodium?: number;
+};
+
+export type QualityScore = {
+  overall: number;
+  varietyScore: number;
+  diversityScore: number;
+  constraintViolations: number;
+  grade: string;
+};
+
+export type DailyAverages = {
+  calories?: number;
+  protein?: number;
+  carbohydrates?: number;
+  fat?: number;
+};
+
+export type NutritionalSummary = {
+  dailyAverages?: DailyAverages;
+};
+
+export type MealSlot = {
+  day: string;
+  mealType: string;
+  recipeId: string;
+  recipeName: string;
+  servings?: number;
+  prepTime?: number;
+  cookTime?: number;
+  nutritionalInfo?: MealNutritionalInfo;
+};
+
+export type MealPlan = {
+  familyId: string;
+  weekStartDate: string;
+  status: string;
+  meals: MealSlot[];
+  nutritionalSummary?: NutritionalSummary;
+  constraintsUsed: string;
+  generatedBy: string;
+  qualityScore?: QualityScore;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateMealSlotPayload = {
+  day: string;
+  mealType: string;
+  recipeId: string;
+  servings?: number;
+};
+
+export type CreateMealPlanPayload = {
+  weekStartDate: string;
+  meals: CreateMealSlotPayload[];
+};
+
+export type UpdateMealPlanPayload = {
+  meals?: CreateMealSlotPayload[];
+  status?: string;
+};
+
+export type GenerateMealPlanPayload = {
+  weekStartDate: string;
+  prompt?: string;
+  replaceExisting?: boolean;
+};
+
+export type MealSwapSuggestion = {
+  recipeId: string;
+  recipeName: string;
+  prepTime?: number;
+  cookTime?: number;
+  constraintSafe: boolean;
+  score: number;
+  notes: string[];
 };
 
 export type FavoriteRecipe = {

@@ -1,0 +1,138 @@
+namespace ThcMealPlanner.Api.MealPlans;
+
+public sealed class MealPlanDocument
+{
+    public string FamilyId { get; init; } = string.Empty;
+
+    public string WeekStartDate { get; init; } = string.Empty;
+
+    public string Status { get; init; } = "active";
+
+    public List<MealSlotDocument> Meals { get; init; } = [];
+
+    public NutritionalSummaryDocument? NutritionalSummary { get; init; }
+
+    public string ConstraintsUsed { get; init; } = "v1";
+
+    public string GeneratedBy { get; init; } = "manual";
+
+    public QualityScoreDocument? QualityScore { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; init; }
+
+    public long? TTL { get; init; }
+}
+
+public sealed class MealSlotDocument
+{
+    public string Day { get; init; } = string.Empty;
+
+    public string MealType { get; init; } = string.Empty;
+
+    public string RecipeId { get; init; } = string.Empty;
+
+    public string RecipeName { get; init; } = string.Empty;
+
+    public int? Servings { get; init; }
+
+    public int? PrepTime { get; init; }
+
+    public int? CookTime { get; init; }
+
+    public MealNutritionalInfo? NutritionalInfo { get; init; }
+}
+
+public sealed class MealNutritionalInfo
+{
+    public int? Calories { get; init; }
+
+    public int? Protein { get; init; }
+
+    public int? Carbohydrates { get; init; }
+
+    public int? Fat { get; init; }
+
+    public int? Sodium { get; init; }
+}
+
+public sealed class NutritionalSummaryDocument
+{
+    public DailyAveragesDocument? DailyAverages { get; init; }
+}
+
+public sealed class DailyAveragesDocument
+{
+    public int? Calories { get; init; }
+
+    public int? Protein { get; init; }
+
+    public int? Carbohydrates { get; init; }
+
+    public int? Fat { get; init; }
+}
+
+public sealed class QualityScoreDocument
+{
+    public int Overall { get; init; }
+
+    public int VarietyScore { get; init; }
+
+    public int DiversityScore { get; init; }
+
+    public int ConstraintViolations { get; init; }
+
+    public string Grade { get; init; } = string.Empty;
+}
+
+public sealed class CreateMealPlanRequest
+{
+    public string WeekStartDate { get; init; } = string.Empty;
+
+    public List<CreateMealSlotRequest> Meals { get; init; } = [];
+}
+
+public sealed class CreateMealSlotRequest
+{
+    public string Day { get; init; } = string.Empty;
+
+    public string MealType { get; init; } = string.Empty;
+
+    public string RecipeId { get; init; } = string.Empty;
+
+    public int? Servings { get; init; }
+}
+
+public sealed class UpdateMealPlanRequest
+{
+    public List<CreateMealSlotRequest>? Meals { get; init; }
+
+    public string? Status { get; init; }
+}
+
+public sealed class GenerateMealPlanRequest
+{
+    public string WeekStartDate { get; init; } = string.Empty;
+
+    public string? Prompt { get; init; }
+
+    public bool ReplaceExisting { get; init; }
+}
+
+public sealed class MealSwapSuggestion
+{
+    public string RecipeId { get; init; } = string.Empty;
+
+    public string RecipeName { get; init; } = string.Empty;
+
+    public int? PrepTime { get; init; }
+
+    public int? CookTime { get; init; }
+
+    public bool ConstraintSafe { get; init; }
+
+    public int Score { get; init; }
+
+    public List<string> Notes { get; init; } = [];
+}

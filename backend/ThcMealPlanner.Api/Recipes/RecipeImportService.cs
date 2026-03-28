@@ -325,6 +325,8 @@ public sealed partial class RecipeImportService : IRecipeImportService
         var servings = ParseFirstInt(GetString(recipe, "recipeYield"));
         var prepTimeMinutes = ParseDurationMinutes(GetString(recipe, "prepTime"));
         var cookTimeMinutes = ParseDurationMinutes(GetString(recipe, "cookTime"));
+        var proteinSource = ParseDelimitedList(GetString(recipe, "proteinSource"));
+        var cookingMethod = ParseDelimitedList(GetString(recipe, "cookingMethod"));
         var tags = ParseDelimitedList(GetString(recipe, "keywords"));
         var ingredients = ParseJsonLdIngredients(recipe);
         var instructions = ParseJsonLdInstructions(recipe);
@@ -351,6 +353,8 @@ public sealed partial class RecipeImportService : IRecipeImportService
             Servings = servings,
             PrepTimeMinutes = prepTimeMinutes,
             CookTimeMinutes = cookTimeMinutes,
+            ProteinSource = proteinSource,
+            CookingMethod = cookingMethod,
             Tags = tags,
             Ingredients = ingredients,
             Instructions = instructions,
