@@ -10,6 +10,7 @@ import {
   getMealSwapSuggestions,
   updateMealPlan
 } from '../services/mealPlanApi';
+import { generateGroceryList } from '../services/groceryListApi';
 import { listRecipes } from '../services/recipeApi';
 import type { MealPlan, Recipe } from '../types';
 
@@ -25,12 +26,17 @@ vi.mock('../services/recipeApi', () => ({
   listRecipes: vi.fn()
 }));
 
+vi.mock('../services/groceryListApi', () => ({
+  generateGroceryList: vi.fn()
+}));
+
 const mockedGetCurrentMealPlan = vi.mocked(getCurrentMealPlan);
 const mockedGetMealPlanHistory = vi.mocked(getMealPlanHistory);
 const mockedGenerateMealPlan = vi.mocked(generateMealPlan);
 const mockedUpdateMealPlan = vi.mocked(updateMealPlan);
 const mockedGetMealSwapSuggestions = vi.mocked(getMealSwapSuggestions);
 const mockedListRecipes = vi.mocked(listRecipes);
+const mockedGenerateGroceryList = vi.mocked(generateGroceryList);
 
 function buildRecipe(overrides?: Partial<Recipe>): Recipe {
   return {
@@ -100,6 +106,7 @@ describe('MealPlansPage', () => {
       buildRecipe({ recipeId: 'rec_l', name: 'Lunch A', category: 'lunch' })
     ]);
     mockedGenerateMealPlan.mockResolvedValue(buildMealPlan({ weekStartDate: '2026-04-06' }));
+    mockedGenerateGroceryList.mockResolvedValue(buildMealPlan({ weekStartDate: '2026-04-06' }) as never);
     mockedUpdateMealPlan.mockResolvedValue(buildMealPlan({ meals: [{ day: 'Monday', mealType: 'dinner', recipeId: 'rec_2', recipeName: 'Dinner B' }] }));
     mockedGetMealSwapSuggestions.mockResolvedValue([
       {
@@ -138,6 +145,15 @@ describe('MealPlansPage', () => {
       );
     });
 
+    await waitFor(() => {
+      expect(mockedGenerateGroceryList).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clearExisting: false,
+          weekStartDate: expect.any(String)
+        })
+      );
+    });
+
     expect(screen.getByText('2026-04-06')).toBeInTheDocument();
   });
 
@@ -156,6 +172,13 @@ describe('MealPlansPage', () => {
     await waitFor(() => {
       expect(mockedUpdateMealPlan).toHaveBeenCalledWith('2026-03-30', {
         meals: [{ day: 'Monday', mealType: 'dinner', recipeId: 'rec_2' }]
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockedGenerateGroceryList).toHaveBeenCalledWith({
+        weekStartDate: '2026-03-30',
+        clearExisting: false
       });
     });
 

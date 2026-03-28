@@ -2,21 +2,27 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import {
+  addPantryStapleItem,
   addGroceryItem,
+  deletePantryStapleItem,
   generateGroceryList,
   getCurrentGroceryList,
+  getPantryStaples,
   pollGroceryList,
+  replacePantryStaples,
   removeGroceryItem,
   setGroceryItemInStock,
   toggleGroceryItem
 } from '../services/groceryListApi';
 import { ApiError, getApiErrorMessage } from '../services/api';
-import type { GroceryItem, GroceryList } from '../types';
+import type { GroceryItem, GroceryList, PantryStaples } from '../types';
 
 const DEFAULT_SECTION = 'produce';
+const DEFAULT_SECTION_ORDER = ['produce', 'protein', 'dairy', 'pantry', 'frozen', 'household', 'other'];
 
 export function GroceryListPage() {
   const [list, setList] = useState<GroceryList | null>(null);
+  const [pantry, setPantry] = useState<PantryStaples | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +30,8 @@ export function GroceryListPage() {
   const [newItemSection, setNewItemSection] = useState(DEFAULT_SECTION);
   const [newItemQuantity, setNewItemQuantity] = useState('1');
   const [newItemUnit, setNewItemUnit] = useState('');
+  const [newStapleName, setNewStapleName] = useState('');
+  const [newStapleSection, setNewStapleSection] = useState(DEFAULT_SECTION);
 
   useEffect(() => {
     let active = true;
@@ -32,22 +40,34 @@ export function GroceryListPage() {
       try {
         setIsLoading(true);
         setError(null);
-        const current = await getCurrentGroceryList();
+        const [currentListResult, pantryResult] = await Promise.allSettled([
+          getCurrentGroceryList(),
+          getPantryStaples()
+        ]);
+
         if (!active) {
           return;
         }
 
-        setList(current);
+        if (currentListResult.status === 'fulfilled') {
+          setList(currentListResult.value);
+        } else if (currentListResult.reason instanceof ApiError && currentListResult.reason.status === 404) {
+          setList(null);
+        } else {
+          throw currentListResult.reason;
+        }
+
+        if (pantryResult.status === 'fulfilled') {
+          setPantry(pantryResult.value);
+        } else {
+          throw pantryResult.reason;
+        }
       } catch (err) {
         if (!active) {
           return;
         }
 
-        if (err instanceof ApiError && err.status === 404) {
-          setList(null);
-        } else {
-          setError(getApiErrorMessage(err, 'Unable to load grocery list.'));
-        }
+        setError(getApiErrorMessage(err, 'Unable to load grocery list.'));
       } finally {
         if (active) {
           setIsLoading(false);
@@ -102,6 +122,9 @@ export function GroceryListPage() {
       return [];
     }
 
+    const order = pantry?.preferredSectionOrder?.length ? pantry.preferredSectionOrder : DEFAULT_SECTION_ORDER;
+    const rank = new Map(order.map((section, index) => [section.toLowerCase(), index]));
+
     const groups = new Map<string, GroceryItem[]>();
     for (const item of list.items) {
       const section = item.section?.trim() || 'other';
@@ -115,8 +138,19 @@ export function GroceryListPage() {
         section,
         items: [...items].sort((a, b) => a.name.localeCompare(b.name))
       }))
-      .sort((a, b) => a.section.localeCompare(b.section));
-  }, [list]);
+      .sort((a, b) => {
+        const rankA = rank.get(a.section.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+        const rankB = rank.get(b.section.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+        return rankA === rankB ? a.section.localeCompare(b.section) : rankA - rankB;
+      });
+  }, [list, pantry?.preferredSectionOrder]);
+
+  const orderedSectionFlow = useMemo(() => {
+    const pantryOrder = pantry?.preferredSectionOrder?.length ? pantry.preferredSectionOrder : DEFAULT_SECTION_ORDER;
+    const fromList = list?.items.map((item) => item.section.toLowerCase()) ?? [];
+
+    return [...new Set([...pantryOrder.map((s) => s.toLowerCase()), ...fromList])];
+  }, [list?.items, pantry?.preferredSectionOrder]);
 
   const toBuyCount = useMemo(() => {
     return list?.items.filter((item) => !item.checkedOff && !item.inStock).length ?? 0;
@@ -130,6 +164,89 @@ export function GroceryListPage() {
       setList(generated);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to generate grocery list.'));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleAddPantryStaple() {
+    const name = newStapleName.trim();
+    if (!name) {
+      setError('Pantry staple name is required.');
+      return;
+    }
+
+    try {
+      setIsBusy(true);
+      setError(null);
+      const updated = await addPantryStapleItem({
+        name,
+        section: newStapleSection
+      });
+
+      setPantry(updated);
+      setNewStapleName('');
+      setNewStapleSection(DEFAULT_SECTION);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to add pantry staple.'));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleDeletePantryStaple(name: string) {
+    try {
+      setIsBusy(true);
+      setError(null);
+      await deletePantryStapleItem(name);
+      const latest = await getPantryStaples();
+      setPantry(latest);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to remove pantry staple.'));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleMoveSection(section: string, offset: -1 | 1) {
+    if (!pantry) {
+      return;
+    }
+
+    const currentOrder = pantry.preferredSectionOrder.length ? pantry.preferredSectionOrder : DEFAULT_SECTION_ORDER;
+    const fromIndex = currentOrder.findIndex((candidate) => candidate.toLowerCase() === section.toLowerCase());
+    if (fromIndex < 0) {
+      return;
+    }
+
+    const toIndex = fromIndex + offset;
+    if (toIndex < 0 || toIndex >= currentOrder.length) {
+      return;
+    }
+
+    const nextOrder = [...currentOrder];
+    const [moved] = nextOrder.splice(fromIndex, 1);
+    nextOrder.splice(toIndex, 0, moved);
+
+    try {
+      setIsBusy(true);
+      setError(null);
+      setPantry({ ...pantry, preferredSectionOrder: nextOrder });
+
+      const updated = await replacePantryStaples({
+        items: pantry.items,
+        preferredSectionOrder: nextOrder
+      });
+
+      setPantry(updated);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to update section order.'));
+      try {
+        const latest = await getPantryStaples();
+        setPantry(latest);
+      } catch {
+        // Keep current local state if reload fails.
+      }
     } finally {
       setIsBusy(false);
     }
@@ -363,6 +480,93 @@ export function GroceryListPage() {
                 Add
               </Button>
             </div>
+          </div>
+
+          <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Pantry Staples</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Pantry staples auto-mark matching grocery items as in-stock during generation.
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <input
+                placeholder="Staple name"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                value={newStapleName}
+                onChange={(event) => setNewStapleName(event.target.value)}
+              />
+              <select
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                value={newStapleSection}
+                onChange={(event) => setNewStapleSection(event.target.value)}
+              >
+                <option value="produce">produce</option>
+                <option value="protein">protein</option>
+                <option value="dairy">dairy</option>
+                <option value="pantry">pantry</option>
+                <option value="frozen">frozen</option>
+                <option value="household">household</option>
+                <option value="other">other</option>
+              </select>
+              <Button type="button" onClick={handleAddPantryStaple} disabled={isBusy}>
+                Add Staple
+              </Button>
+            </div>
+
+            {pantry?.items.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pantry.items.map((item) => (
+                  <span key={item.name} className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs text-slate-700 ring-1 ring-amber-200">
+                    {item.name} ({item.section ?? 'other'})
+                    <button
+                      type="button"
+                      className="text-slate-500 hover:text-red-700"
+                      onClick={() => {
+                        void handleDeletePantryStaple(item.name);
+                      }}
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-slate-600">No staples configured yet.</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Store Section Flow</p>
+            <p className="mt-1 text-xs text-slate-600">Reorder sections to match your primary store route.</p>
+            <ul className="mt-3 space-y-2">
+              {orderedSectionFlow.map((section, index) => (
+                <li key={section} className="flex items-center justify-between rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
+                  <span className="text-sm text-slate-800">{section}</span>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={isBusy || index === 0}
+                      onClick={() => {
+                        void handleMoveSection(section, -1);
+                      }}
+                    >
+                      Up
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={isBusy || index === orderedSectionFlow.length - 1}
+                      onClick={() => {
+                        void handleMoveSection(section, 1);
+                      }}
+                    >
+                      Down
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="space-y-3">

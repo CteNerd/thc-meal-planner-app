@@ -45,19 +45,27 @@ Check-in template:
 - Contracts touched: Added `DELETE /api/grocery-lists/items/{itemId}?version=` for optimistic remove flow; added pantry staples endpoints (`GET /api/pantry/staples`, `PUT /api/pantry/staples`, `POST /api/pantry/staples/items`, `DELETE /api/pantry/staples/items/{name}`) with validators and service support.
 - Blockers or handoff requests: Pantry UI is still pending; need Mac Mini runtime verification against deployed tables and dual-user conflict behavior.
 
+### 2026-03-28 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 5.7, 5.8, 5.9 (integration completion)
+- Status: In Progress
+- Contracts touched: Added pantry `preferredSectionOrder` persistence and validation; implemented Grocery List pantry/staples UI and section-flow reordering; wired meal plan create/generate/update/delete endpoints to trigger grocery list regeneration for reactive updates after meal changes.
+- Blockers or handoff requests: Mac Mini lane should verify deployed runtime behavior for meal-swap reactive recalculation and dual-user live update paths.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
 | 5.1 | Grocery list generation API | Codespaces | In Progress | Backend generation endpoint and service landed; frontend generate flow integrated. |
-| 5.2 | Grocery list UI | Codespaces | In Progress | Grocery list page implemented with section grouping, metrics, and item actions. |
+| 5.2 | Grocery list UI | Codespaces | Done | Grocery list page now includes grouped list, metrics, manual add/remove, pantry management, and section-flow controls. |
 | 5.3 | Optimistic concurrency | Codespaces | In Progress | Version checks added backend-side and surfaced with client-side conflict recovery refresh. |
 | 5.4 | Activity-based polling | Shared | In Progress | Backend poll endpoint + frontend visibility-aware 5-second polling implemented locally. |
 | 5.5 | Add/remove items manually | Codespaces | In Progress | Manual add and remove API/UI flows implemented; deployed multi-user verification pending. |
 | 5.6 | Completed item TTL cleanup | Codespaces | In Progress | 7-day application-level cleanup added in service read path. |
-| 5.7 | Store preferences integration | Codespaces | Not Started | Pending section ordering integration. |
-| 5.8 | Grocery list reactivity on meal changes | Shared | Not Started | Pending meal-swap/meal-update hook-in. |
-| 5.9 | Pantry staples management | Codespaces | In Progress | Pantry staples CRUD API endpoints implemented; pantry management UI pending. |
+| 5.7 | Store preferences integration | Codespaces | Done | Primary store section ordering implemented via pantry `preferredSectionOrder` and applied to grocery section rendering. |
+| 5.8 | Grocery list reactivity on meal changes | Shared | In Progress | Meal plan create/generate/update/delete now trigger grocery regeneration; deployed verification pending. |
+| 5.9 | Pantry staples management | Codespaces | Done | Pantry CRUD API + pantry management UI implemented with tests. |
 | 5.10 | In-stock toggle | Codespaces | In Progress | Endpoint + UI toggle implemented; to-buy count excludes checked and in-stock items. |
 
 ## Milestone Criteria Tracking
@@ -66,13 +74,13 @@ Check-in template:
 - [ ] Both users see real-time updates when checking items
 - [~] Conflict resolution works (two users check same item simultaneously)
 - [~] Completed items auto-clean after 7 days
-- [ ] Swapping a meal updates the grocery list (old ingredients removed, new ones added)
-- [~] Pantry staples auto-flagged as in-stock on new grocery lists
+- [~] Swapping a meal updates the grocery list (old ingredients removed, new ones added)
+- [x] Pantry staples auto-flagged as in-stock on new grocery lists
 - [ ] In-stock items visually distinguished and excluded from shopping count
 
 ## Validation Status
 
 - Backend local validation: `dotnet test backend/ThcMealPlanner.Tests/ThcMealPlanner.Tests.csproj` passed (`118 passed, 0 failed`).
-- Frontend local validation: `npm run test -- --run` passed (`8 files, 37 tests`) and `npm run build` passed.
+- Frontend local validation: `npm run test -- --run` passed (`8 files, 38 tests`) and `npm run build` passed.
 
 `[~]` indicates local implementation in progress with deployed verification still pending.

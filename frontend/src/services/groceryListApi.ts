@@ -1,9 +1,12 @@
 import type {
   AddGroceryItemPayload,
+  AddPantryStapleItemPayload,
   GenerateGroceryListPayload,
   GroceryItemMutationResponse,
   GroceryList,
   GroceryListPollResponse,
+  PantryStaples,
+  ReplacePantryStaplesPayload,
   SetInStockPayload,
   ToggleGroceryItemPayload
 } from '../types';
@@ -65,4 +68,33 @@ export async function pollGroceryList(sinceIso: string): Promise<GroceryListPoll
   }
 
   return (await response.json()) as GroceryListPollResponse;
+}
+
+export async function getPantryStaples(): Promise<PantryStaples> {
+  return await apiGet<PantryStaples>('/pantry/staples');
+}
+
+export async function replacePantryStaples(payload: ReplacePantryStaplesPayload): Promise<PantryStaples> {
+  return await apiPut<PantryStaples, ReplacePantryStaplesPayload>('/pantry/staples', payload);
+}
+
+export async function addPantryStapleItem(payload: AddPantryStapleItemPayload): Promise<PantryStaples> {
+  return await apiPost<PantryStaples, AddPantryStapleItemPayload>('/pantry/staples/items', payload);
+}
+
+export async function deletePantryStapleItem(name: string): Promise<void> {
+  const response = await apiFetch(`/pantry/staples/items/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    throw new ApiError(response.status, `Request failed with status ${response.status}`, payload);
+  }
 }

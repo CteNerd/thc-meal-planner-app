@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ApiError, getApiErrorMessage } from '../services/api';
+import { generateGroceryList } from '../services/groceryListApi';
 import {
   generateMealPlan,
   getCurrentMealPlan,
@@ -114,6 +115,15 @@ export function MealPlansPage() {
       setCurrentPlan(generated);
       setHistoryPlans((current) => [generated, ...current.filter((plan) => plan.weekStartDate !== generated.weekStartDate)]);
       setActiveTab('current');
+
+      try {
+        await generateGroceryList({
+          weekStartDate,
+          clearExisting: false
+        });
+      } catch {
+        // Keep meal-plan success even if grocery sync fails; backend also enforces reactivity.
+      }
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to generate meal plan.'));
     } finally {
@@ -135,6 +145,15 @@ export function MealPlansPage() {
 
       setCurrentPlan(updated);
       setHistoryPlans((current) => current.map((plan) => (plan.weekStartDate === updated.weekStartDate ? updated : plan)));
+
+      try {
+        await generateGroceryList({
+          weekStartDate: currentPlan.weekStartDate,
+          clearExisting: false
+        });
+      } catch {
+        // Keep meal-plan success even if grocery sync fails; backend also enforces reactivity.
+      }
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to swap meal slot.'));
     } finally {

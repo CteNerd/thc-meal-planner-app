@@ -1,5 +1,6 @@
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
+using ThcMealPlanner.Api.GroceryLists;
 
 namespace ThcMealPlanner.Api.MealPlans;
 
@@ -113,6 +114,7 @@ public static class MealPlanEndpoints
         CreateMealPlanRequest request,
         IValidator<CreateMealPlanRequest> validator,
         IMealPlanService mealPlanService,
+        IGroceryListService groceryListService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -134,6 +136,12 @@ public static class MealPlanEndpoints
         }
 
         var plan = await mealPlanService.CreateAsync(userContext.FamilyId, userContext.Sub, request, cancellationToken);
+        await groceryListService.GenerateAsync(
+            userContext.FamilyId,
+            userContext.Sub,
+            userContext.Name,
+            new GenerateGroceryListRequest { WeekStartDate = request.WeekStartDate, ClearExisting = false },
+            cancellationToken);
 
         return Results.Created($"/api/meal-plans/{plan.WeekStartDate}", plan);
     }
@@ -143,6 +151,7 @@ public static class MealPlanEndpoints
         GenerateMealPlanRequest request,
         IValidator<GenerateMealPlanRequest> validator,
         IMealPlanService mealPlanService,
+        IGroceryListService groceryListService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -167,6 +176,12 @@ public static class MealPlanEndpoints
         }
 
         var plan = await mealPlanService.GenerateAsync(userContext.FamilyId, userContext.Sub, request, cancellationToken);
+        await groceryListService.GenerateAsync(
+            userContext.FamilyId,
+            userContext.Sub,
+            userContext.Name,
+            new GenerateGroceryListRequest { WeekStartDate = request.WeekStartDate, ClearExisting = false },
+            cancellationToken);
 
         return Results.Created($"/api/meal-plans/{plan.WeekStartDate}", plan);
     }
@@ -177,6 +192,7 @@ public static class MealPlanEndpoints
         UpdateMealPlanRequest request,
         IValidator<UpdateMealPlanRequest> validator,
         IMealPlanService mealPlanService,
+        IGroceryListService groceryListService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -193,6 +209,16 @@ public static class MealPlanEndpoints
 
         var updated = await mealPlanService.UpdateAsync(userContext.FamilyId, weekStartDate, request, cancellationToken);
 
+        if (updated is not null)
+        {
+            await groceryListService.GenerateAsync(
+                userContext.FamilyId,
+                userContext.Sub,
+                userContext.Name,
+                new GenerateGroceryListRequest { WeekStartDate = weekStartDate, ClearExisting = false },
+                cancellationToken);
+        }
+
         return updated is null
             ? MealPlanProblemDetails.PlanNotFound(weekStartDate)
             : Results.Ok(updated);
@@ -202,6 +228,7 @@ public static class MealPlanEndpoints
         HttpContext httpContext,
         string weekStartDate,
         IMealPlanService mealPlanService,
+        IGroceryListService groceryListService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -211,6 +238,16 @@ public static class MealPlanEndpoints
         }
 
         var deleted = await mealPlanService.DeleteAsync(userContext.FamilyId, weekStartDate, cancellationToken);
+
+        if (deleted)
+        {
+            await groceryListService.GenerateAsync(
+                userContext.FamilyId,
+                userContext.Sub,
+                userContext.Name,
+                new GenerateGroceryListRequest { ClearExisting = false },
+                cancellationToken);
+        }
 
         return deleted ? Results.NoContent() : MealPlanProblemDetails.PlanNotFound(weekStartDate);
     }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http.Json;
+using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
 using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Core.Data;
@@ -251,6 +252,8 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
 
         var recipeRepository = recipeRepositories.FirstOrDefault() ?? new InMemoryMealPlanRecipeRepository();
         var favoriteRepository = new InMemoryMealPlanFavoriteRepository();
+        var groceryRepository = new InMemoryMealPlanGroceryRepository();
+        var pantryRepository = new InMemoryMealPlanPantryRepository();
 
         var constraintEngine = new ConstraintEngine(Options.Create(new ConstraintConfig
         {
@@ -271,9 +274,12 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
                 services.AddSingleton<IDynamoDbRepository<MealPlanDocument>>(planRepository);
                 services.AddSingleton<IDynamoDbRepository<RecipeDocument>>(recipeRepository);
                 services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
+                services.AddSingleton<IDynamoDbRepository<GroceryListDocument>>(groceryRepository);
+                services.AddSingleton<IDynamoDbRepository<PantryStaplesDocument>>(pantryRepository);
                 services.AddScoped<IRecipeService>(_ => new RecipeService(recipeRepository, favoriteRepository));
                 services.AddSingleton<IConstraintEngine>(constraintEngine);
                 services.AddSingleton<IMealPlanAiService, NoOpMealPlanAiService>();
+                services.AddScoped<IGroceryListService, GroceryListService>();
                 services.AddScoped<IMealPlanService>(sp => new MealPlanService(
                     planRepository,
                     sp.GetRequiredService<IRecipeService>(),
@@ -282,6 +288,13 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
                 services.AddScoped<IValidator<CreateMealPlanRequest>, CreateMealPlanRequestValidator>();
                 services.AddScoped<IValidator<UpdateMealPlanRequest>, UpdateMealPlanRequestValidator>();
                 services.AddScoped<IValidator<GenerateMealPlanRequest>, GenerateMealPlanRequestValidator>();
+                services.AddScoped<IValidator<GenerateGroceryListRequest>, GenerateGroceryListRequestValidator>();
+                services.AddScoped<IValidator<ToggleGroceryItemRequest>, ToggleGroceryItemRequestValidator>();
+                services.AddScoped<IValidator<AddGroceryItemRequest>, AddGroceryItemRequestValidator>();
+                services.AddScoped<IValidator<SetInStockRequest>, SetInStockRequestValidator>();
+                services.AddScoped<IValidator<RemoveGroceryItemRequest>, RemoveGroceryItemRequestValidator>();
+                services.AddScoped<IValidator<ReplacePantryStaplesRequest>, ReplacePantryStaplesRequestValidator>();
+                services.AddScoped<IValidator<AddPantryStapleItemRequest>, AddPantryStapleItemRequestValidator>();
             });
         }).CreateClient();
     }
@@ -363,6 +376,104 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
 
         private static string ToMapKey(DynamoDbKey key) => $"{key.PartitionKey}|{key.SortKey}";
     }
+
+    private sealed class InMemoryMealPlanGroceryRepository : IDynamoDbRepository<GroceryListDocument>
+    {
+        private readonly Dictionary<string, GroceryListDocument> _store = new(StringComparer.Ordinal);
+
+        public Task<GroceryListDocument?> GetAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.TryGetValue(ToCompositeKey(key), out var value);
+            return Task.FromResult(value);
+        }
+
+        public Task PutAsync(DynamoDbKey key, GroceryListDocument document, CancellationToken cancellationToken = default)
+        {
+            _store[ToCompositeKey(key)] = document;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.Remove(ToCompositeKey(key));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<GroceryListDocument>> QueryByPartitionKeyAsync(string partitionKey, int? limit = null, CancellationToken cancellationToken = default)
+        {
+            var results = _store
+                .Where(kvp => kvp.Key.StartsWith($"{partitionKey}|", StringComparison.Ordinal))
+                .Select(kvp => kvp.Value);
+
+            if (limit.HasValue)
+            {
+                results = results.Take(limit.Value);
+            }
+
+            return Task.FromResult<IReadOnlyList<GroceryListDocument>>(results.ToList());
+        }
+
+        public Task<IReadOnlyList<GroceryListDocument>> QueryByIndexPartitionKeyAsync(
+            string indexName,
+            string partitionKeyName,
+            string partitionKeyValue,
+            IReadOnlyDictionary<string, string>? equalsFilters = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<GroceryListDocument>>([]);
+        }
+    }
+
+    private sealed class InMemoryMealPlanPantryRepository : IDynamoDbRepository<PantryStaplesDocument>
+    {
+        private readonly Dictionary<string, PantryStaplesDocument> _store = new(StringComparer.Ordinal);
+
+        public Task<PantryStaplesDocument?> GetAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.TryGetValue(ToCompositeKey(key), out var value);
+            return Task.FromResult(value);
+        }
+
+        public Task PutAsync(DynamoDbKey key, PantryStaplesDocument document, CancellationToken cancellationToken = default)
+        {
+            _store[ToCompositeKey(key)] = document;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.Remove(ToCompositeKey(key));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<PantryStaplesDocument>> QueryByPartitionKeyAsync(string partitionKey, int? limit = null, CancellationToken cancellationToken = default)
+        {
+            var results = _store
+                .Where(kvp => kvp.Key.StartsWith($"{partitionKey}|", StringComparison.Ordinal))
+                .Select(kvp => kvp.Value);
+
+            if (limit.HasValue)
+            {
+                results = results.Take(limit.Value);
+            }
+
+            return Task.FromResult<IReadOnlyList<PantryStaplesDocument>>(results.ToList());
+        }
+
+        public Task<IReadOnlyList<PantryStaplesDocument>> QueryByIndexPartitionKeyAsync(
+            string indexName,
+            string partitionKeyName,
+            string partitionKeyValue,
+            IReadOnlyDictionary<string, string>? equalsFilters = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<PantryStaplesDocument>>([]);
+        }
+    }
+
+    private static string ToCompositeKey(DynamoDbKey key) => $"{key.PartitionKey}|{key.SortKey}";
 
     private sealed class InMemoryMealPlanRecipeRepository : IDynamoDbRepository<RecipeDocument>
     {

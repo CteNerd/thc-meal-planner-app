@@ -75,6 +75,11 @@ public sealed class ReplacePantryStaplesRequestValidator : AbstractValidator<Rep
     public ReplacePantryStaplesRequestValidator()
     {
         RuleForEach(x => x.Items).SetValidator(new PantryStapleItemValidator());
+
+        RuleForEach(x => x.PreferredSectionOrder)
+            .NotEmpty()
+            .MaximumLength(50)
+            .When(x => x.PreferredSectionOrder is not null);
     }
 }
 

@@ -203,13 +203,15 @@ public sealed class GroceryListEndpointsTests : IClassFixture<WebApplicationFact
             [
                 new PantryStapleItemDocument { Name = "Salt", Section = "spices" },
                 new PantryStapleItemDocument { Name = "Olive Oil", Section = "pantry" }
-            ]
+            ],
+            PreferredSectionOrder = ["produce", "pantry", "protein"]
         });
 
         putResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await putResponse.Content.ReadFromJsonAsync<PantryStaplesDocument>();
         updated.Should().NotBeNull();
         updated!.Items.Should().HaveCount(2);
+        updated.PreferredSectionOrder.Should().ContainInOrder("produce", "pantry", "protein");
 
         var getResponse = await client.GetAsync("/api/pantry/staples");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -247,6 +249,9 @@ public sealed class GroceryListEndpointsTests : IClassFixture<WebApplicationFact
                 services.AddScoped<IValidator<ToggleGroceryItemRequest>, ToggleGroceryItemRequestValidator>();
                 services.AddScoped<IValidator<AddGroceryItemRequest>, AddGroceryItemRequestValidator>();
                 services.AddScoped<IValidator<SetInStockRequest>, SetInStockRequestValidator>();
+                services.AddScoped<IValidator<RemoveGroceryItemRequest>, RemoveGroceryItemRequestValidator>();
+                services.AddScoped<IValidator<ReplacePantryStaplesRequest>, ReplacePantryStaplesRequestValidator>();
+                services.AddScoped<IValidator<AddPantryStapleItemRequest>, AddPantryStapleItemRequestValidator>();
             });
         }).CreateClient();
     }

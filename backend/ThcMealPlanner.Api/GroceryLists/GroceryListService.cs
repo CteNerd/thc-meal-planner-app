@@ -64,6 +64,8 @@ public interface IGroceryListService
 public sealed class GroceryListService : IGroceryListService
 {
     private static readonly TimeSpan CompletedItemRetention = TimeSpan.FromDays(7);
+    private static readonly string[] DefaultSectionOrder =
+        ["produce", "protein", "dairy", "pantry", "frozen", "household", "other"];
 
     private readonly IDynamoDbRepository<GroceryListDocument> _groceryListRepository;
     private readonly IDynamoDbRepository<PantryStaplesDocument> _pantryRepository;
@@ -361,6 +363,7 @@ public sealed class GroceryListService : IGroceryListService
         {
             FamilyId = familyId,
             Items = [],
+            PreferredSectionOrder = [.. DefaultSectionOrder],
             UpdatedAt = DateTimeOffset.UtcNow
         };
     }
@@ -382,6 +385,7 @@ public sealed class GroceryListService : IGroceryListService
                 .DistinctBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
+            PreferredSectionOrder = NormalizeSectionOrder(request.PreferredSectionOrder),
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -408,6 +412,7 @@ public sealed class GroceryListService : IGroceryListService
         var updated = pantry with
         {
             Items = nextItems,
+            PreferredSectionOrder = NormalizeSectionOrder(pantry.PreferredSectionOrder),
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -435,6 +440,7 @@ public sealed class GroceryListService : IGroceryListService
         var updated = pantry with
         {
             Items = nextItems,
+            PreferredSectionOrder = NormalizeSectionOrder(pantry.PreferredSectionOrder),
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -631,6 +637,25 @@ public sealed class GroceryListService : IGroceryListService
 
     private static string ComposeStableKey(GroceryItemDocument item) =>
         $"{NormalizeName(item.Name)}|{item.Unit?.Trim()}";
+
+    private static List<string> NormalizeSectionOrder(IEnumerable<string>? values)
+    {
+        var explicitValues = (values ?? [])
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var defaultSection in DefaultSectionOrder)
+        {
+            if (!explicitValues.Contains(defaultSection, StringComparer.OrdinalIgnoreCase))
+            {
+                explicitValues.Add(defaultSection);
+            }
+        }
+
+        return explicitValues;
+    }
 
     private static DynamoDbKey ToListKey(string familyId) =>
         new($"FAMILY#{familyId}", GroceryListConstants.ActiveListId);

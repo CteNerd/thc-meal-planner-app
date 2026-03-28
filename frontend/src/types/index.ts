@@ -342,6 +342,28 @@ export type GroceryListPollResponse = {
   updatedAt: string;
 };
 
+export type PantryStapleItem = {
+  name: string;
+  section?: string;
+};
+
+export type PantryStaples = {
+  familyId: string;
+  items: PantryStapleItem[];
+  preferredSectionOrder: string[];
+  updatedAt: string;
+};
+
+export type ReplacePantryStaplesPayload = {
+  items: PantryStapleItem[];
+  preferredSectionOrder?: string[];
+};
+
+export type AddPantryStapleItemPayload = {
+  name: string;
+  section?: string;
+};
+
 export type FavoriteRecipe = {
   userId: string;
   recipeId: string;

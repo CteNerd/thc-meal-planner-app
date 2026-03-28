@@ -68,6 +68,8 @@ public sealed record class PantryStaplesDocument
 
     public List<PantryStapleItemDocument> Items { get; init; } = [];
 
+    public List<string> PreferredSectionOrder { get; init; } = [];
+
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
@@ -118,6 +120,8 @@ public sealed class RemoveGroceryItemRequest
 public sealed class ReplacePantryStaplesRequest
 {
     public List<PantryStapleItemDocument> Items { get; init; } = [];
+
+    public List<string>? PreferredSectionOrder { get; init; }
 }
 
 public sealed class AddPantryStapleItemRequest

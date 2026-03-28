@@ -5,11 +5,15 @@ import { ApiError } from '../services/api';
 import {
   generateGroceryList,
   getCurrentGroceryList,
+  getPantryStaples,
   pollGroceryList,
+  replacePantryStaples,
   removeGroceryItem,
   setGroceryItemInStock,
   toggleGroceryItem,
-  addGroceryItem
+  addGroceryItem,
+  addPantryStapleItem,
+  deletePantryStapleItem
 } from '../services/groceryListApi';
 import { GroceryListPage } from './GroceryListPage';
 import type { GroceryList } from '../types';
@@ -21,7 +25,11 @@ vi.mock('../services/groceryListApi', () => ({
   setGroceryItemInStock: vi.fn(),
   addGroceryItem: vi.fn(),
   pollGroceryList: vi.fn(),
-  removeGroceryItem: vi.fn()
+  removeGroceryItem: vi.fn(),
+  getPantryStaples: vi.fn(),
+  replacePantryStaples: vi.fn(),
+  addPantryStapleItem: vi.fn(),
+  deletePantryStapleItem: vi.fn()
 }));
 
 const mockedGetCurrentGroceryList = vi.mocked(getCurrentGroceryList);
@@ -31,6 +39,10 @@ const mockedSetGroceryItemInStock = vi.mocked(setGroceryItemInStock);
 const mockedAddGroceryItem = vi.mocked(addGroceryItem);
 const mockedPollGroceryList = vi.mocked(pollGroceryList);
 const mockedRemoveGroceryItem = vi.mocked(removeGroceryItem);
+const mockedGetPantryStaples = vi.mocked(getPantryStaples);
+const mockedReplacePantryStaples = vi.mocked(replacePantryStaples);
+const mockedAddPantryStapleItem = vi.mocked(addPantryStapleItem);
+const mockedDeletePantryStapleItem = vi.mocked(deletePantryStapleItem);
 
 function buildList(overrides?: Partial<GroceryList>): GroceryList {
   return {
@@ -57,6 +69,17 @@ function buildList(overrides?: Partial<GroceryList>): GroceryList {
       percentage: 0
     },
     ...overrides
+  };
+}
+
+function buildPantry() {
+  return {
+    familyId: 'FAM#test-family',
+    items: [
+      { name: 'Salt', section: 'pantry' }
+    ],
+    preferredSectionOrder: ['produce', 'protein', 'dairy', 'pantry', 'frozen', 'household', 'other'],
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -112,6 +135,10 @@ describe('GroceryListPage', () => {
     });
     mockedPollGroceryList.mockResolvedValue(null);
     mockedRemoveGroceryItem.mockResolvedValue();
+    mockedGetPantryStaples.mockResolvedValue(buildPantry());
+    mockedReplacePantryStaples.mockResolvedValue(buildPantry());
+    mockedAddPantryStapleItem.mockResolvedValue(buildPantry());
+    mockedDeletePantryStapleItem.mockResolvedValue();
   });
 
   it('loads and renders existing grocery list', async () => {
@@ -184,6 +211,7 @@ describe('GroceryListPage', () => {
 
   it('shows empty state when no grocery list exists', async () => {
     mockedGetCurrentGroceryList.mockRejectedValue(new ApiError(404, 'Not Found', { detail: 'Not found' }));
+    mockedGetPantryStaples.mockResolvedValue(buildPantry());
 
     render(<GroceryListPage />);
 
@@ -198,6 +226,17 @@ describe('GroceryListPage', () => {
 
     await waitFor(() => {
       expect(mockedRemoveGroceryItem).toHaveBeenCalledWith('item_1', 3);
+    });
+  });
+
+  it('reorders section flow', async () => {
+    render(<GroceryListPage />);
+
+    await screen.findByText('Store Section Flow');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Down' })[0]);
+
+    await waitFor(() => {
+      expect(mockedReplacePantryStaples).toHaveBeenCalled();
     });
   });
 });
