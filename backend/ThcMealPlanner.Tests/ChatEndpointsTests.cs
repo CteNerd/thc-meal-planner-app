@@ -9,6 +9,7 @@ using System.Net.Http.Json;
 using ThcMealPlanner.Api.Chat;
 using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
+using ThcMealPlanner.Api.Profiles;
 using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Core.Data;
 
@@ -93,11 +94,13 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
                         _ => { });
 
                 services.AddSingleton<IDynamoDbRepository<ChatHistoryMessageDocument>>(chatRepository);
+                services.AddSingleton<IDynamoDbRepository<UserProfileDocument>, InMemoryRepository<UserProfileDocument>>();
                 services.AddScoped<IValidator<ChatMessageRequest>, ChatMessageRequestValidator>();
                 services.AddSingleton<IOpenAiApiKeyProvider, NoOpOpenAiApiKeyProvider>();
                 services.AddSingleton<IMealPlanService, NoOpMealPlanService>();
                 services.AddSingleton<IRecipeService, NoOpRecipeService>();
                 services.AddSingleton<IGroceryListService, NoOpGroceryListService>();
+                services.AddSingleton<IDependentProfileService, NoOpDependentProfileService>();
                 services.AddScoped<IChatService>(sp => new ChatService(
                     chatRepository,
                     sp.GetRequiredService<IOpenAiApiKeyProvider>(),
@@ -105,6 +108,8 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
                     sp.GetRequiredService<IMealPlanService>(),
                     sp.GetRequiredService<IRecipeService>(),
                     sp.GetRequiredService<IGroceryListService>(),
+                    sp.GetRequiredService<IDynamoDbRepository<UserProfileDocument>>(),
+                    sp.GetRequiredService<IDependentProfileService>(),
                     new HttpClient(),
                     sp.GetRequiredService<ILogger<ChatService>>()));
             });
@@ -235,5 +240,16 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
         public Task<PantryStaplesDocument> AddPantryStapleAsync(string familyId, AddPantryStapleItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
 
         public Task<bool> DeletePantryStapleAsync(string familyId, string name, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    }
+
+    private sealed class NoOpDependentProfileService : IDependentProfileService
+    {
+        public Task<IReadOnlyList<DependentProfileDocument>> ListByFamilyAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<DependentProfileDocument>>([]);
+
+        public Task<DependentProfileDocument> CreateAsync(string familyId, CreateDependentRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new DependentProfileDocument());
+
+        public Task<DependentProfileDocument?> UpdateAsync(string familyId, string userId, UpdateDependentRequest request, CancellationToken cancellationToken = default) => Task.FromResult<DependentProfileDocument?>(null);
+
+        public Task<bool> DeleteAsync(string familyId, string userId, CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 }

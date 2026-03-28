@@ -42,13 +42,21 @@ Check-in template:
 - Contracts touched: Extended chat service to send OpenAI tool definitions and execute first-pass function calls against service layer (`generate_meal_plan`, `search_recipes`, `create_recipe`, `manage_grocery_list` add/list, `get_nutritional_info`, `manage_pantry` add/list); action execution now records structured chat actions in persisted history.
 - Blockers or handoff requests: Tool set is partial versus full Phase 6 target and currently executes a single tool call per turn. Follow-up needed for `modify_meal_plan`, `update_profile`, destructive action execution with explicit confirm/cancel state, and dynamic prompt context from profiles/dependents/current plan/grocery state.
 
+### 2026-03-28 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 6.3 (dynamic prompt context)
+- Status: In Progress
+- Contracts touched: Chat system prompt now includes runtime context from authenticated user profile, dependent profiles, active meal plan summary, and active grocery list progress before invoking OpenAI.
+- Blockers or handoff requests: Prompt context is currently text summary only; follow-up needed to include richer constraint serialization (macro targets/cooking constraints) and explicit allergy-safe recipe filtering in tool execution paths.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
 | 6.1 | Chat API endpoint | Codespaces | In Progress | Initial POST/GET endpoints implemented; streaming response still pending. |
 | 6.2 | OpenAI function calling (8 functions) | Codespaces | In Progress | Initial tool definitions + execution dispatcher implemented for core actions; remaining functions and multi-step tool loops pending. |
-| 6.3 | System prompt builder | Codespaces | In Progress | Static safety/system prompt active; dynamic family/dependent/plan/grocery context injection still pending. |
+| 6.3 | System prompt builder | Codespaces | In Progress | Runtime profile + dependents + active plan/grocery context injected; richer constraint serialization still pending. |
 | 6.4 | Chat UI | Codespaces | In Progress | Bubble-style chat page and send flow implemented; markdown rendering polish pending. |
 | 6.5 | Confirmation flow | Codespaces | In Progress | Baseline destructive-intent confirmation prompt added; action cards + execution gating pending. |
 | 6.6 | Conversation history (30-day TTL) | Codespaces | In Progress | History document model + read/write support implemented; conversation management endpoints pending. |

@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
+using ThcMealPlanner.Api.Profiles;
 using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Core.Data;
 
@@ -147,6 +148,8 @@ public sealed class ChatService : IChatService
     private readonly IMealPlanService _mealPlanService;
     private readonly IRecipeService _recipeService;
     private readonly IGroceryListService _groceryListService;
+    private readonly IDynamoDbRepository<UserProfileDocument> _profileRepository;
+    private readonly IDependentProfileService _dependentProfileService;
     private readonly HttpClient _httpClient;
     private readonly ILogger<ChatService> _logger;
 
@@ -157,6 +160,8 @@ public sealed class ChatService : IChatService
         IMealPlanService mealPlanService,
         IRecipeService recipeService,
         IGroceryListService groceryListService,
+        IDynamoDbRepository<UserProfileDocument> profileRepository,
+        IDependentProfileService dependentProfileService,
         HttpClient httpClient,
         ILogger<ChatService> logger)
     {
@@ -166,6 +171,8 @@ public sealed class ChatService : IChatService
         _mealPlanService = mealPlanService;
         _recipeService = recipeService;
         _groceryListService = groceryListService;
+        _profileRepository = profileRepository;
+        _dependentProfileService = dependentProfileService;
         _httpClient = httpClient;
         _logger = logger;
     }
@@ -318,13 +325,7 @@ public sealed class ChatService : IChatService
             return null;
         }
 
-        var systemContent = string.Join('\n',
-        [
-            "You are a family meal planning assistant.",
-            "Only help with meal planning, recipes, grocery lists, pantry staples, and nutrition.",
-            "Never execute destructive actions without explicit user confirmation.",
-            "Respond in concise markdown."
-        ]);
+        var systemContent = await BuildSystemPromptAsync(familyId, userId, cancellationToken);
 
         var userContent = $"User: {userName}\\nMessage: {userMessage}";
         var payload = BuildChatPayloadJson(_options.Model, _options.Temperature, systemContent, userContent, ToolsJson);
@@ -488,6 +489,68 @@ public sealed class ChatService : IChatService
         private static string EscapeJson(string value)
         {
                 return JavaScriptEncoder.Default.Encode(value);
+        }
+
+        private async Task<string> BuildSystemPromptAsync(string familyId, string userId, CancellationToken cancellationToken)
+        {
+            var profile = await _profileRepository.GetAsync(new DynamoDbKey($"USER#{userId}", "PROFILE"), cancellationToken);
+            var dependents = await _dependentProfileService.ListByFamilyAsync(familyId, cancellationToken);
+            var currentPlan = await _mealPlanService.GetCurrentAsync(familyId, cancellationToken);
+            var currentGrocery = await _groceryListService.GetCurrentAsync(familyId, cancellationToken);
+
+            var profileLine = profile is null
+                ? "Primary profile: not configured yet."
+                : $"Primary profile: {profile.Name}. Dietary prefs: {FormatList(profile.DietaryPrefs)}. Exclusions: {FormatList(profile.ExcludedIngredients)}. Allergies: {FormatAllergies(profile.Allergies)}.";
+
+            var dependentLines = dependents.Count == 0
+                ? "Dependents: none configured."
+                : "Dependents:\n" + string.Join('\n', dependents.Select(dep =>
+                    $"- {dep.Name} ({dep.AgeGroup ?? "age unknown"}): dietary prefs {FormatList(dep.DietaryPrefs)}, avoids {FormatList(dep.AvoidedFoods)}, allergies {FormatAllergies(dep.Allergies)}."));
+
+            var mealPlanLine = currentPlan is null
+                ? "Active meal plan: none."
+                : $"Active meal plan: week {currentPlan.WeekStartDate}, {currentPlan.Meals.Count} scheduled meals.";
+
+            var groceryLine = currentGrocery is null
+                ? "Active grocery list: none."
+                : $"Active grocery list: {currentGrocery.Items.Count} items, {currentGrocery.Progress.Completed} completed.";
+
+            return string.Join('\n',
+            [
+                "You are a family meal planning assistant.",
+                "Only help with meal planning, recipes, grocery lists, pantry staples, and nutrition.",
+                "Never execute destructive actions without explicit user confirmation.",
+                "Always respect allergies and excluded ingredients for all family members.",
+                "Respond in concise markdown.",
+                string.Empty,
+                profileLine,
+                dependentLines,
+                mealPlanLine,
+                groceryLine
+            ]);
+        }
+
+        private static string FormatList(IReadOnlyCollection<string>? values)
+        {
+            if (values is null || values.Count == 0)
+            {
+                return "none";
+            }
+
+            return string.Join(", ", values);
+        }
+
+        private static string FormatAllergies(IReadOnlyCollection<AllergyModel>? allergies)
+        {
+            if (allergies is null || allergies.Count == 0)
+            {
+                return "none";
+            }
+
+            return string.Join(", ", allergies.Select(allergy =>
+                string.IsNullOrWhiteSpace(allergy.Severity)
+                    ? allergy.Allergen
+                    : $"{allergy.Allergen} ({allergy.Severity})"));
         }
 
         private static List<ChatToolCall> ExtractToolCalls(string responseBody)
