@@ -48,10 +48,8 @@ export function ChatPage() {
     };
   }, []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const trimmedMessage = draft.trim();
+  async function sendMessage(message: string) {
+    const trimmedMessage = message.trim();
     if (!trimmedMessage || isBusy) {
       return;
     }
@@ -80,6 +78,11 @@ export function ChatPage() {
     } finally {
       setIsBusy(false);
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendMessage(draft);
   }
 
   return (
@@ -117,6 +120,27 @@ export function ChatPage() {
             ].join(' ')}
           >
             {message.content}
+            {message.role === 'assistant' && message.requiresConfirmation ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void sendMessage('Confirm')}
+                  disabled={isBusy}
+                  className="!px-3 !py-1.5 !text-xs"
+                >
+                  Confirm
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void sendMessage('Cancel')}
+                  disabled={isBusy}
+                  variant="ghost"
+                  className="!px-3 !py-1.5 !text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : null}
           </div>
         ))}
 

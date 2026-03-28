@@ -56,4 +56,31 @@ describe('ChatPage', () => {
 
     expect(await screen.findByText('Try two fast dinners and one leftovers night this week.')).toBeInTheDocument();
   });
+
+  it('shows confirmation controls and sends confirm', async () => {
+    mockedGetChatHistory.mockResolvedValue({
+      conversationId: 'conv_confirm',
+      messages: [
+        {
+          role: 'assistant',
+          content: 'This looks like a destructive action. Reply with Confirm to proceed.',
+          timestamp: new Date().toISOString(),
+          requiresConfirmation: true,
+          pendingActionType: 'destructive_action'
+        }
+      ]
+    });
+
+    render(<ChatPage />);
+
+    expect(await screen.findByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(mockedSendChatMessage).toHaveBeenCalledWith({
+        message: 'Confirm',
+        conversationId: 'conv_confirm'
+      });
+    });
+  });
 });

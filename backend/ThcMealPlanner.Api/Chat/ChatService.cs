@@ -33,6 +33,7 @@ public sealed class ChatService : IChatService
         private const string SearchRecipesToolName = "search_recipes";
         private const string CreateRecipeToolName = "create_recipe";
         private const string ManageGroceryListToolName = "manage_grocery_list";
+        private const string UpdateProfileToolName = "update_profile";
         private const string GetNutritionalInfoToolName = "get_nutritional_info";
         private const string ManagePantryToolName = "manage_pantry";
 
@@ -99,10 +100,25 @@ public sealed class ChatService : IChatService
                             "parameters":{
                                 "type":"object",
                                 "properties":{
-                                    "action":{"type":"string","enum":["add_items","list"]},
+                                    "action":{"type":"string","enum":["add_items","list","clear_completed"]},
                                     "items":{"type":"array","items":{"type":"object"}}
                                 },
                                 "required":["action"]
+                            }
+                        }
+                    },
+                    {
+                        "type":"function",
+                        "function":{
+                            "name":"update_profile",
+                            "description":"Update user profile fields.",
+                            "parameters":{
+                                "type":"object",
+                                "properties":{
+                                    "userId":{"type":"string"},
+                                    "updates":{"type":"object"}
+                                },
+                                "required":["updates"]
                             }
                         }
                     },
@@ -190,17 +206,50 @@ public sealed class ChatService : IChatService
             : request.ConversationId!.Trim();
 
         var userMessage = request.Message.Trim();
-        var requiresConfirmation = IsDestructiveIntent(userMessage);
+        var isConfirmationResponse = IsConfirmationResponse(userMessage);
+        var isCancellationResponse = IsCancellationResponse(userMessage);
+        var requiresConfirmation = !isConfirmationResponse && !isCancellationResponse && IsDestructiveIntent(userMessage);
 
         var toolActions = new List<ChatActionDocument>();
-        var assistantContent = await BuildAssistantContentAsync(
-            familyId,
-            userId,
-            userName,
-            userMessage,
-            requiresConfirmation,
-            toolActions,
-            cancellationToken);
+        PendingConfirmationDocument? pendingConfirmation;
+        string assistantContent;
+
+        if (isConfirmationResponse || isCancellationResponse)
+        {
+            var pending = await TryGetLatestPendingConfirmationAsync(userId, conversationId, cancellationToken);
+            assistantContent = await HandleConfirmationReplyAsync(
+                familyId,
+                userId,
+                userName,
+                conversationId,
+                userMessage,
+                pending,
+                toolActions,
+                cancellationToken);
+
+            requiresConfirmation = false;
+            pendingConfirmation = null;
+        }
+        else
+        {
+            assistantContent = await BuildAssistantContentAsync(
+                familyId,
+                userId,
+                userName,
+                userMessage,
+                requiresConfirmation,
+                toolActions,
+                cancellationToken);
+
+            pendingConfirmation = requiresConfirmation
+                ? new PendingConfirmationDocument
+                {
+                    ActionType = "destructive_action",
+                    Prompt = "Please confirm this destructive action."
+                }
+                : null;
+        }
+
         var assistantRole = ChatConstants.AssistantRole;
 
         await PersistMessageAsync(
@@ -213,14 +262,6 @@ public sealed class ChatService : IChatService
             pendingConfirmation: null,
             actions: null,
             cancellationToken);
-
-        var pendingConfirmation = requiresConfirmation
-            ? new PendingConfirmationDocument
-            {
-                ActionType = "destructive_action",
-                Prompt = "Please confirm this destructive action."
-            }
-            : null;
 
         var assistantTimestamp = DateTimeOffset.UtcNow;
         await PersistMessageAsync(
@@ -459,6 +500,147 @@ public sealed class ChatService : IChatService
             || normalized.Contains("recipe", StringComparison.Ordinal);
     }
 
+    private static bool IsConfirmationResponse(string message)
+    {
+        var normalized = message.Trim().ToLowerInvariant();
+        return normalized is "confirm" or "yes" or "proceed";
+    }
+
+    private static bool IsCancellationResponse(string message)
+    {
+        var normalized = message.Trim().ToLowerInvariant();
+        return normalized is "cancel" or "no" or "stop";
+    }
+
+    private async Task<ChatHistoryMessageDocument?> TryGetLatestPendingConfirmationAsync(
+        string userId,
+        string conversationId,
+        CancellationToken cancellationToken)
+    {
+        var partitionKey = $"USER#{userId}";
+        var records = await _chatHistoryRepository.QueryByPartitionKeyAsync(partitionKey, cancellationToken: cancellationToken);
+
+        return records
+            .Where(record => string.Equals(record.ConversationId, conversationId, StringComparison.Ordinal))
+            .Where(record => string.Equals(record.Role, ChatConstants.AssistantRole, StringComparison.Ordinal))
+            .Where(record => record.PendingConfirmation is not null)
+            .OrderByDescending(record => record.CreatedAt)
+            .FirstOrDefault();
+    }
+
+    private async Task<string> HandleConfirmationReplyAsync(
+        string familyId,
+        string userId,
+        string userName,
+        string conversationId,
+        string userMessage,
+        ChatHistoryMessageDocument? pendingMessage,
+        List<ChatActionDocument> toolActions,
+        CancellationToken cancellationToken)
+    {
+        if (pendingMessage?.PendingConfirmation is null)
+        {
+            return "There is no pending action to confirm right now.";
+        }
+
+        if (IsCancellationResponse(userMessage))
+        {
+            toolActions.Add(new ChatActionDocument
+            {
+                Type = pendingMessage.PendingConfirmation.ActionType,
+                Status = "canceled",
+                Result = "User canceled action"
+            });
+
+            return "Canceled. I did not apply that action.";
+        }
+
+        if (!string.Equals(pendingMessage.PendingConfirmation.ActionType, "destructive_action", StringComparison.Ordinal))
+        {
+            return "I cannot execute that pending action yet.";
+        }
+
+        var partitionKey = $"USER#{userId}";
+        var records = await _chatHistoryRepository.QueryByPartitionKeyAsync(partitionKey, cancellationToken: cancellationToken);
+        var priorUserMessage = records
+            .Where(record => string.Equals(record.ConversationId, conversationId, StringComparison.Ordinal))
+            .Where(record => string.Equals(record.Role, ChatConstants.UserRole, StringComparison.Ordinal))
+            .Where(record => record.CreatedAt <= pendingMessage.CreatedAt)
+            .OrderByDescending(record => record.CreatedAt)
+            .Select(record => record.Content)
+            .FirstOrDefault();
+
+        if (priorUserMessage is not null && MentionsClearCompletedGrocery(priorUserMessage))
+        {
+            var removedCount = await ClearCompletedGroceryItemsAsync(familyId, cancellationToken);
+            toolActions.Add(new ChatActionDocument
+            {
+                Type = "clear_completed_grocery",
+                Status = "succeeded",
+                Result = $"Removed {removedCount}"
+            });
+
+            return removedCount == 0
+                ? "No completed grocery items needed clearing."
+                : $"Cleared {removedCount} completed grocery item(s).";
+        }
+
+        toolActions.Add(new ChatActionDocument
+        {
+            Type = "destructive_action",
+            Status = "failed",
+            Result = "Pending action not executable"
+        });
+
+        return "I need a more specific action before I can execute that confirmation.";
+    }
+
+    private static bool MentionsClearCompletedGrocery(string message)
+    {
+        var normalized = message.ToLowerInvariant();
+        return (normalized.Contains("grocery", StringComparison.Ordinal) || normalized.Contains("list", StringComparison.Ordinal))
+            && (normalized.Contains("clear", StringComparison.Ordinal) || normalized.Contains("remove", StringComparison.Ordinal))
+            && normalized.Contains("complete", StringComparison.Ordinal);
+    }
+
+    private async Task<int> ClearCompletedGroceryItemsAsync(string familyId, CancellationToken cancellationToken)
+    {
+        var current = await _groceryListService.GetCurrentAsync(familyId, cancellationToken);
+        if (current is null)
+        {
+            return 0;
+        }
+
+        var completedItems = current.Items.Where(item => item.CheckedOff).ToList();
+        if (completedItems.Count == 0)
+        {
+            return 0;
+        }
+
+        var removedCount = 0;
+        var latest = current;
+
+        foreach (var item in completedItems)
+        {
+            var mutation = await _groceryListService.RemoveItemAsync(
+                familyId,
+                item.Id,
+                new RemoveGroceryItemRequest
+                {
+                    Version = latest.Version
+                },
+                cancellationToken);
+
+            if (mutation.Status == GroceryItemMutationStatus.Success && mutation.List is not null)
+            {
+                latest = mutation.List;
+                removedCount += 1;
+            }
+        }
+
+        return removedCount;
+    }
+
         private static string BuildChatPayloadJson(
                 string model,
                 double temperature,
@@ -623,6 +805,7 @@ public sealed class ChatService : IChatService
                     SearchRecipesToolName => await ExecuteSearchRecipesAsync(toolCall.ArgumentsJson, familyId, cancellationToken),
                     CreateRecipeToolName => await ExecuteCreateRecipeAsync(toolCall.ArgumentsJson, familyId, userId, cancellationToken),
                     ManageGroceryListToolName => await ExecuteManageGroceryListAsync(toolCall.ArgumentsJson, familyId, userId, userName, cancellationToken),
+                    UpdateProfileToolName => await ExecuteUpdateProfileAsync(toolCall.ArgumentsJson, familyId, userId, cancellationToken),
                     GetNutritionalInfoToolName => await ExecuteGetNutritionalInfoAsync(toolCall.ArgumentsJson, familyId, cancellationToken),
                     ManagePantryToolName => await ExecuteManagePantryAsync(toolCall.ArgumentsJson, familyId, cancellationToken),
                     _ => new ChatToolExecutionResult(
@@ -829,6 +1012,16 @@ public sealed class ChatService : IChatService
 
             if (!string.Equals(action, "add_items", StringComparison.OrdinalIgnoreCase))
             {
+                if (string.Equals(action, "clear_completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    var removedCount = await ClearCompletedGroceryItemsAsync(familyId, cancellationToken);
+                    return new ChatToolExecutionResult(
+                        removedCount == 0
+                            ? "No completed grocery items needed clearing."
+                            : $"Cleared {removedCount} completed grocery item(s).",
+                        new ChatActionDocument { Type = ManageGroceryListToolName, Status = "succeeded", Result = $"Cleared {removedCount}" });
+                }
+
                 return new ChatToolExecutionResult(
                     "I currently support grocery list actions: add_items and list.",
                     new ChatActionDocument { Type = ManageGroceryListToolName, Status = "ignored", Result = "Unsupported action" });
@@ -952,6 +1145,72 @@ public sealed class ChatService : IChatService
                 new ChatActionDocument { Type = GetNutritionalInfoToolName, Status = "succeeded", Result = $"{selected.Count} recipes" });
         }
 
+        private async Task<ChatToolExecutionResult> ExecuteUpdateProfileAsync(
+            string argumentsJson,
+            string familyId,
+            string currentUserId,
+            CancellationToken cancellationToken)
+        {
+            using var argsDoc = ParseArguments(argumentsJson);
+            var root = argsDoc.RootElement;
+
+            if (!root.TryGetProperty("updates", out var updatesElement) || updatesElement.ValueKind != JsonValueKind.Object)
+            {
+                return new ChatToolExecutionResult(
+                    "Please include an updates object for profile changes.",
+                    new ChatActionDocument { Type = UpdateProfileToolName, Status = "failed", Result = "Missing updates object" });
+            }
+
+            var targetUserId = root.TryGetProperty("userId", out var userIdElement) && userIdElement.ValueKind == JsonValueKind.String
+                ? userIdElement.GetString()
+                : currentUserId;
+
+            if (string.IsNullOrWhiteSpace(targetUserId))
+            {
+                return new ChatToolExecutionResult(
+                    "I could not determine which profile to update.",
+                    new ChatActionDocument { Type = UpdateProfileToolName, Status = "failed", Result = "Missing userId" });
+            }
+
+            var key = new DynamoDbKey($"USER#{targetUserId}", "PROFILE");
+            var existing = await _profileRepository.GetAsync(key, cancellationToken);
+            if (existing is not null && !string.Equals(existing.FamilyId, familyId, StringComparison.Ordinal))
+            {
+                return new ChatToolExecutionResult(
+                    "I can only update profiles within your family.",
+                    new ChatActionDocument { Type = UpdateProfileToolName, Status = "failed", Result = "Family scope mismatch" });
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var updated = new UserProfileDocument
+            {
+                UserId = existing?.UserId ?? targetUserId,
+                Name = ReadOptionalString(updatesElement, "name") ?? existing?.Name ?? "",
+                Email = ReadOptionalString(updatesElement, "email") ?? existing?.Email ?? "",
+                FamilyId = existing?.FamilyId ?? familyId,
+                Role = existing?.Role ?? "member",
+                DietaryPrefs = ReadOptionalStringList(updatesElement, "dietaryPrefs") ?? existing?.DietaryPrefs ?? [],
+                Allergies = existing?.Allergies ?? [],
+                ExcludedIngredients = ReadOptionalStringList(updatesElement, "excludedIngredients") ?? existing?.ExcludedIngredients ?? [],
+                MacroTargets = existing?.MacroTargets,
+                CuisinePreferences = ReadOptionalStringList(updatesElement, "cuisinePreferences") ?? existing?.CuisinePreferences ?? [],
+                CookingConstraints = existing?.CookingConstraints,
+                FlavorPreferences = existing?.FlavorPreferences,
+                DefaultServings = existing?.DefaultServings,
+                FamilyMembers = existing?.FamilyMembers ?? [],
+                DoctorNotes = ReadOptionalStringList(updatesElement, "doctorNotes") ?? existing?.DoctorNotes ?? [],
+                NotificationPrefs = existing?.NotificationPrefs,
+                CreatedAt = existing?.CreatedAt ?? now,
+                UpdatedAt = now
+            };
+
+            await _profileRepository.PutAsync(key, updated, cancellationToken);
+
+            return new ChatToolExecutionResult(
+                $"Updated profile for **{(string.IsNullOrWhiteSpace(updated.Name) ? targetUserId : updated.Name)}**.",
+                new ChatActionDocument { Type = UpdateProfileToolName, Status = "succeeded", Result = targetUserId });
+        }
+
         private async Task<ChatToolExecutionResult> ExecuteManagePantryAsync(
             string argumentsJson,
             string familyId,
@@ -1035,6 +1294,32 @@ public sealed class ChatService : IChatService
             }
 
             return property.TryGetInt32(out var intValue) ? intValue : null;
+        }
+
+        private static string? ReadOptionalString(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var value = property.GetString();
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static List<string>? ReadOptionalStringList(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            return property.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString() ?? string.Empty)
+                .Select(item => item.Trim())
+                .Where(item => item.Length > 0)
+                .ToList();
         }
 
         private static List<RecipeIngredientModel> ParseRecipeIngredients(JsonElement root)

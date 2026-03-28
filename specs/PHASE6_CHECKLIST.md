@@ -50,15 +50,31 @@ Check-in template:
 - Contracts touched: Chat system prompt now includes runtime context from authenticated user profile, dependent profiles, active meal plan summary, and active grocery list progress before invoking OpenAI.
 - Blockers or handoff requests: Prompt context is currently text summary only; follow-up needed to include richer constraint serialization (macro targets/cooking constraints) and explicit allergy-safe recipe filtering in tool execution paths.
 
+### 2026-03-28 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 6.5 (confirmation execution flow) + 6.4 UX increment
+- Status: In Progress
+- Contracts touched: Added backend confirm/cancel reply handling that resolves pending destructive confirmations per conversation and executes clear-completed grocery cleanup on confirm when applicable; added chat UI confirm/cancel controls on assistant confirmation messages.
+- Blockers or handoff requests: Pending-confirmation payload is still intent-inferred for generic destructive messages; follow-up needed for explicit structured pending action payloads and broader destructive operations coverage.
+
+### 2026-03-28 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 6.2 additional tool coverage (`update_profile`)
+- Status: In Progress
+- Contracts touched: Added `update_profile` tool definition and execution path in chat service with family-scope checks and safe partial updates for profile fields.
+- Blockers or handoff requests: Profile tool currently updates a limited subset of fields and does not yet support dependent profile mutation or validator-backed patch semantics.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
 | 6.1 | Chat API endpoint | Codespaces | In Progress | Initial POST/GET endpoints implemented; streaming response still pending. |
-| 6.2 | OpenAI function calling (8 functions) | Codespaces | In Progress | Initial tool definitions + execution dispatcher implemented for core actions; remaining functions and multi-step tool loops pending. |
+| 6.2 | OpenAI function calling (8 functions) | Codespaces | In Progress | Core dispatcher implemented with meal-plan, recipe, grocery, pantry, nutrition, and profile update handlers; missing modify_meal_plan and broader multi-step loops. |
 | 6.3 | System prompt builder | Codespaces | In Progress | Runtime profile + dependents + active plan/grocery context injected; richer constraint serialization still pending. |
-| 6.4 | Chat UI | Codespaces | In Progress | Bubble-style chat page and send flow implemented; markdown rendering polish pending. |
-| 6.5 | Confirmation flow | Codespaces | In Progress | Baseline destructive-intent confirmation prompt added; action cards + execution gating pending. |
+| 6.4 | Chat UI | Codespaces | In Progress | Bubble chat + send flow + confirmation buttons implemented; markdown rendering polish pending. |
+| 6.5 | Confirmation flow | Codespaces | In Progress | Confirm/cancel handling and clear-completed execution path implemented; structured pending payload coverage still pending. |
 | 6.6 | Conversation history (30-day TTL) | Codespaces | In Progress | History document model + read/write support implemented; conversation management endpoints pending. |
 | 6.7 | Safety guardrails | Shared | In Progress | Topic restriction and message sanitization baseline implemented; deeper allergy/tool validation pending. |
 

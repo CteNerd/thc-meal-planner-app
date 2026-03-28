@@ -80,6 +80,31 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
         payload.Messages.Should().Contain(m => m.Role == ChatConstants.AssistantRole);
     }
 
+    [Fact]
+    public async Task PostMessage_WhenConfirmingPendingDestructiveAction_ReturnsConfirmationOutcome()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var destructiveResponse = await client.PostAsJsonAsync("/api/chat/message", new ChatMessageRequest
+        {
+            Message = "Clear completed grocery items",
+            ConversationId = "conv_confirm"
+        });
+
+        destructiveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var confirmResponse = await client.PostAsJsonAsync("/api/chat/message", new ChatMessageRequest
+        {
+            Message = "Confirm",
+            ConversationId = "conv_confirm"
+        });
+
+        confirmResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await confirmResponse.Content.ReadFromJsonAsync<ChatMessageResponse>();
+        payload.Should().NotBeNull();
+        payload!.AssistantMessage.Content.Should().Contain("No completed grocery items needed clearing");
+    }
+
     private HttpClient CreateAuthenticatedClient()
     {
         var chatRepository = new InMemoryRepository<ChatHistoryMessageDocument>();
