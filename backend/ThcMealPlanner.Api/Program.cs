@@ -1,6 +1,7 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
+using ThcMealPlanner.Api.Chat;
 using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
 using ThcMealPlanner.Api.Profiles;
@@ -17,6 +18,7 @@ builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>();
 builder.Services.AddHttpClient<IMealPlanAiService, MealPlanAiService>();
+builder.Services.AddHttpClient<IChatService, ChatService>();
 builder.Services.AddScoped<IRecipeImageUploadService, RecipeImageUploadService>();
 builder.Services.Configure<OpenAiOptions>(options =>
 {
@@ -46,6 +48,7 @@ builder.Services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestV
 builder.Services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
 builder.Services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
+builder.Services.AddScoped<IValidator<ChatMessageRequest>, ChatMessageRequestValidator>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -85,6 +88,7 @@ authenticatedApi.MapRecipeEndpoints();
 authenticatedApi.MapMealPlanEndpoints();
 authenticatedApi.MapGroceryListEndpoints();
 authenticatedApi.MapPantryEndpoints();
+authenticatedApi.MapChatEndpoints();
 
 app.Run();
 

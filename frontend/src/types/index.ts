@@ -364,6 +364,29 @@ export type AddPantryStapleItemPayload = {
   section?: string;
 };
 
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  requiresConfirmation?: boolean;
+  pendingActionType?: string;
+};
+
+export type ChatMessageRequestPayload = {
+  message: string;
+  conversationId?: string;
+};
+
+export type ChatMessageResponse = {
+  conversationId: string;
+  assistantMessage: ChatMessage;
+};
+
+export type ChatHistoryResponse = {
+  conversationId?: string;
+  messages: ChatMessage[];
+};
+
 export type FavoriteRecipe = {
   userId: string;
   recipeId: string;
