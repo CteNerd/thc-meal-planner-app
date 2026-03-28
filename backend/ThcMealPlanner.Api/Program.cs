@@ -1,6 +1,7 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
+using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
 using ThcMealPlanner.Api.Profiles;
 using ThcMealPlanner.Api.Recipes;
@@ -26,9 +27,17 @@ builder.Services.AddScoped<IOpenAiApiKeyProvider, OpenAiApiKeyProvider>();
 builder.Services.Configure<ConstraintConfig>(builder.Configuration.GetSection(ConstraintConfig.SectionName));
 builder.Services.AddScoped<IConstraintEngine, ConstraintEngine>();
 builder.Services.AddScoped<IMealPlanService, MealPlanService>();
+builder.Services.AddScoped<IGroceryListService, GroceryListService>();
 builder.Services.AddScoped<IValidator<CreateMealPlanRequest>, CreateMealPlanRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateMealPlanRequest>, UpdateMealPlanRequestValidator>();
 builder.Services.AddScoped<IValidator<GenerateMealPlanRequest>, GenerateMealPlanRequestValidator>();
+builder.Services.AddScoped<IValidator<GenerateGroceryListRequest>, GenerateGroceryListRequestValidator>();
+builder.Services.AddScoped<IValidator<ToggleGroceryItemRequest>, ToggleGroceryItemRequestValidator>();
+builder.Services.AddScoped<IValidator<AddGroceryItemRequest>, AddGroceryItemRequestValidator>();
+builder.Services.AddScoped<IValidator<SetInStockRequest>, SetInStockRequestValidator>();
+builder.Services.AddScoped<IValidator<RemoveGroceryItemRequest>, RemoveGroceryItemRequestValidator>();
+builder.Services.AddScoped<IValidator<ReplacePantryStaplesRequest>, ReplacePantryStaplesRequestValidator>();
+builder.Services.AddScoped<IValidator<AddPantryStapleItemRequest>, AddPantryStapleItemRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateProfileRequest>, UpdateProfileRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateDependentRequest>, CreateDependentRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateDependentRequest>, UpdateDependentRequestValidator>();
@@ -74,6 +83,8 @@ authenticatedApi.MapProfileEndpoints();
 authenticatedApi.MapDependentEndpoints();
 authenticatedApi.MapRecipeEndpoints();
 authenticatedApi.MapMealPlanEndpoints();
+authenticatedApi.MapGroceryListEndpoints();
+authenticatedApi.MapPantryEndpoints();
 
 app.Run();
 

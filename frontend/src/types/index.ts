@@ -263,6 +263,85 @@ export type MealSwapSuggestion = {
   notes: string[];
 };
 
+export type MealAssociation = {
+  recipeId: string;
+  recipeName: string;
+  mealDay: string;
+};
+
+export type GroceryItem = {
+  id: string;
+  name: string;
+  section: string;
+  quantity: number;
+  unit?: string;
+  mealAssociations: MealAssociation[];
+  checkedOff: boolean;
+  checkedOffBy?: string;
+  checkedOffByName?: string;
+  checkedOffTimestamp?: string;
+  completedTTL?: number;
+  inStock: boolean;
+};
+
+export type GroceryProgress = {
+  total: number;
+  completed: number;
+  percentage: number;
+};
+
+export type GroceryList = {
+  familyId: string;
+  listId: string;
+  items: GroceryItem[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  progress: GroceryProgress;
+};
+
+export type GenerateGroceryListPayload = {
+  weekStartDate?: string;
+  clearExisting?: boolean;
+};
+
+export type ToggleGroceryItemPayload = {
+  version: number;
+};
+
+export type AddGroceryItemPayload = {
+  name: string;
+  section: string;
+  quantity?: number;
+  unit?: string;
+  version: number;
+};
+
+export type SetInStockPayload = {
+  inStock: boolean;
+  version: number;
+};
+
+export type GroceryItemMutationResponse = {
+  item: GroceryItem;
+  version: number;
+  updatedAt: string;
+  progress: GroceryProgress;
+};
+
+export type GroceryListChange = {
+  itemId: string;
+  action: string;
+  item: GroceryItem;
+};
+
+export type GroceryListPollResponse = {
+  hasChanges: boolean;
+  changes: GroceryListChange[];
+  version: number;
+  updatedAt: string;
+};
+
 export type FavoriteRecipe = {
   userId: string;
   recipeId: string;
