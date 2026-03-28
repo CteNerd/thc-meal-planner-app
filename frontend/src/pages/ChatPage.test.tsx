@@ -83,4 +83,22 @@ describe('ChatPage', () => {
       });
     });
   });
+
+  it('renders assistant markdown emphasis', async () => {
+    mockedGetChatHistory.mockResolvedValue({
+      conversationId: 'conv_markdown',
+      messages: [
+        {
+          role: 'assistant',
+          content: 'Try **Sheet Pan Salmon** and `brown rice`.',
+          timestamp: new Date().toISOString()
+        }
+      ]
+    });
+
+    render(<ChatPage />);
+
+    expect(await screen.findByText('Sheet Pan Salmon')).toBeInTheDocument();
+    expect(screen.getByText('brown rice')).toBeInTheDocument();
+  });
 });

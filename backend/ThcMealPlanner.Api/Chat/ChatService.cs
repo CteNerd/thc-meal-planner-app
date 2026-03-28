@@ -237,8 +237,6 @@ public sealed class ChatService : IChatService
             assistantContent = await HandleConfirmationReplyAsync(
                 familyId,
                 userId,
-                userName,
-                conversationId,
                 userMessage,
                 pending,
                 toolActions,
@@ -259,11 +257,7 @@ public sealed class ChatService : IChatService
                 cancellationToken);
 
             pendingConfirmation = requiresConfirmation
-                ? new PendingConfirmationDocument
-                {
-                    ActionType = "destructive_action",
-                    Prompt = "Please confirm this destructive action."
-                }
+                ? BuildPendingConfirmation(userMessage)
                 : null;
         }
 
@@ -346,7 +340,7 @@ public sealed class ChatService : IChatService
     {
         if (requiresConfirmation)
         {
-            return "This looks like a destructive action. Reply with **Confirm** to proceed, or tell me what you want to change.";
+            return "This looks like a destructive action. Reply with **Confirm** to proceed, or **Cancel** to stop.";
         }
 
         if (!IsInDomain(userMessage))
@@ -408,15 +402,24 @@ public sealed class ChatService : IChatService
             var toolCalls = ExtractToolCalls(body);
             if (toolCalls.Count > 0)
             {
-                var execution = await ExecuteToolCallAsync(
-                    toolCalls[0],
-                    familyId,
-                    userId,
-                    userName,
-                    cancellationToken);
+                var responses = new List<string>();
+                foreach (var toolCall in toolCalls.Take(4))
+                {
+                    var execution = await ExecuteToolCallAsync(
+                        toolCall,
+                        familyId,
+                        userId,
+                        userName,
+                        cancellationToken);
 
-                toolActions.Add(execution.Action);
-                return execution.UserFacingMessage;
+                    toolActions.Add(execution.Action);
+                    if (!string.IsNullOrWhiteSpace(execution.UserFacingMessage))
+                    {
+                        responses.Add(execution.UserFacingMessage);
+                    }
+                }
+
+                return responses.Count == 0 ? null : string.Join("\n\n", responses);
             }
 
             return ExtractMessageContent(body);
@@ -537,19 +540,37 @@ public sealed class ChatService : IChatService
         var partitionKey = $"USER#{userId}";
         var records = await _chatHistoryRepository.QueryByPartitionKeyAsync(partitionKey, cancellationToken: cancellationToken);
 
-        return records
+        var conversationRecords = records
             .Where(record => string.Equals(record.ConversationId, conversationId, StringComparison.Ordinal))
+            .ToList();
+
+        var pendingRecords = conversationRecords
             .Where(record => string.Equals(record.Role, ChatConstants.AssistantRole, StringComparison.Ordinal))
             .Where(record => record.PendingConfirmation is not null)
             .OrderByDescending(record => record.CreatedAt)
-            .FirstOrDefault();
+            .ToList();
+
+        foreach (var pending in pendingRecords)
+        {
+            var resolved = conversationRecords
+                .Where(record => record.CreatedAt > pending.CreatedAt)
+                .SelectMany(record => record.Actions)
+                .Any(action => string.Equals(action.Type, pending.PendingConfirmation!.ActionType, StringComparison.Ordinal)
+                    && (string.Equals(action.Status, "succeeded", StringComparison.Ordinal)
+                        || string.Equals(action.Status, "canceled", StringComparison.Ordinal)));
+
+            if (!resolved)
+            {
+                return pending;
+            }
+        }
+
+        return null;
     }
 
     private async Task<string> HandleConfirmationReplyAsync(
         string familyId,
         string userId,
-        string userName,
-        string conversationId,
         string userMessage,
         ChatHistoryMessageDocument? pendingMessage,
         List<ChatActionDocument> toolActions,
@@ -572,27 +593,13 @@ public sealed class ChatService : IChatService
             return "Canceled. I did not apply that action.";
         }
 
-        if (!string.Equals(pendingMessage.PendingConfirmation.ActionType, "destructive_action", StringComparison.Ordinal))
-        {
-            return "I cannot execute that pending action yet.";
-        }
-
-        var partitionKey = $"USER#{userId}";
-        var records = await _chatHistoryRepository.QueryByPartitionKeyAsync(partitionKey, cancellationToken: cancellationToken);
-        var priorUserMessage = records
-            .Where(record => string.Equals(record.ConversationId, conversationId, StringComparison.Ordinal))
-            .Where(record => string.Equals(record.Role, ChatConstants.UserRole, StringComparison.Ordinal))
-            .Where(record => record.CreatedAt <= pendingMessage.CreatedAt)
-            .OrderByDescending(record => record.CreatedAt)
-            .Select(record => record.Content)
-            .FirstOrDefault();
-
-        if (priorUserMessage is not null && MentionsClearCompletedGrocery(priorUserMessage))
+        if (string.Equals(pendingMessage.PendingConfirmation.ToolName, ManageGroceryListToolName, StringComparison.Ordinal)
+            && ArgumentsRequestClearCompleted(pendingMessage.PendingConfirmation.ArgumentsJson))
         {
             var removedCount = await ClearCompletedGroceryItemsAsync(familyId, cancellationToken);
             toolActions.Add(new ChatActionDocument
             {
-                Type = "clear_completed_grocery",
+                Type = pendingMessage.PendingConfirmation.ActionType,
                 Status = "succeeded",
                 Result = $"Removed {removedCount}"
             });
@@ -602,9 +609,14 @@ public sealed class ChatService : IChatService
                 : $"Cleared {removedCount} completed grocery item(s).";
         }
 
+            if (!string.Equals(pendingMessage.PendingConfirmation.ActionType, "destructive_action", StringComparison.Ordinal))
+            {
+                return "I cannot execute that pending action yet.";
+            }
+
         toolActions.Add(new ChatActionDocument
         {
-            Type = "destructive_action",
+            Type = pendingMessage.PendingConfirmation.ActionType,
             Status = "failed",
             Result = "Pending action not executable"
         });
@@ -612,9 +624,49 @@ public sealed class ChatService : IChatService
         return "I need a more specific action before I can execute that confirmation.";
     }
 
-    private static bool MentionsClearCompletedGrocery(string message)
+    private static bool ArgumentsRequestClearCompleted(string? argumentsJson)
     {
-        var normalized = message.ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(argumentsJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(argumentsJson);
+            return doc.RootElement.TryGetProperty("action", out var actionElement)
+                && actionElement.ValueKind == JsonValueKind.String
+                && string.Equals(actionElement.GetString(), "clear_completed", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private PendingConfirmationDocument BuildPendingConfirmation(string userMessage)
+    {
+        if (LooksLikeClearCompletedRequest(userMessage))
+        {
+            return new PendingConfirmationDocument
+            {
+                ActionType = "clear_completed_grocery",
+                Prompt = "This will remove completed grocery items from the active list.",
+                ToolName = ManageGroceryListToolName,
+                ArgumentsJson = "{\"action\":\"clear_completed\"}"
+            };
+        }
+
+        return new PendingConfirmationDocument
+        {
+            ActionType = "destructive_action",
+            Prompt = "Please confirm this destructive action."
+        };
+    }
+
+    private static bool LooksLikeClearCompletedRequest(string userMessage)
+    {
+        var normalized = userMessage.ToLowerInvariant();
         return (normalized.Contains("grocery", StringComparison.Ordinal) || normalized.Contains("list", StringComparison.Ordinal))
             && (normalized.Contains("clear", StringComparison.Ordinal) || normalized.Contains("remove", StringComparison.Ordinal))
             && normalized.Contains("complete", StringComparison.Ordinal);
@@ -871,6 +923,56 @@ public sealed class ChatService : IChatService
                 },
                 cancellationToken);
 
+            var restrictedTerms = await GetRestrictedIngredientTermsAsync(familyId, userId, cancellationToken);
+            if (restrictedTerms.Count > 0)
+            {
+                var recipes = await _recipeService.ListByFamilyAsync(familyId, cancellationToken);
+                var recipeById = recipes.ToDictionary(recipe => recipe.RecipeId, StringComparer.OrdinalIgnoreCase);
+                var safeRecipes = recipes.Where(recipe => IsRecipeSafe(recipe, restrictedTerms)).ToList();
+
+                if (safeRecipes.Count > 0)
+                {
+                    var adjustedMeals = plan.Meals.Select(slot =>
+                    {
+                        var currentSafe = recipeById.TryGetValue(slot.RecipeId, out var currentRecipe)
+                            && IsRecipeSafe(currentRecipe, restrictedTerms);
+
+                        if (currentSafe)
+                        {
+                            return new CreateMealSlotRequest
+                            {
+                                Day = slot.Day,
+                                MealType = slot.MealType,
+                                RecipeId = slot.RecipeId,
+                                Servings = slot.Servings
+                            };
+                        }
+
+                        var replacement = safeRecipes.FirstOrDefault(candidate => string.Equals(candidate.Category, slot.MealType, StringComparison.OrdinalIgnoreCase))
+                            ?? safeRecipes.First();
+
+                        return new CreateMealSlotRequest
+                        {
+                            Day = slot.Day,
+                            MealType = slot.MealType,
+                            RecipeId = replacement.RecipeId,
+                            Servings = slot.Servings
+                        };
+                    }).ToList();
+
+                    var updated = await _mealPlanService.UpdateAsync(
+                        familyId,
+                        weekStartDate,
+                        new UpdateMealPlanRequest { Meals = adjustedMeals },
+                        cancellationToken);
+
+                    if (updated is not null)
+                    {
+                        plan = updated;
+                    }
+                }
+            }
+
             await _groceryListService.GenerateAsync(
                 familyId,
                 userId,
@@ -912,12 +1014,14 @@ public sealed class ChatService : IChatService
                 : [];
 
             var recipes = await _recipeService.ListByFamilyAsync(familyId, cancellationToken);
+            var restrictedTerms = await GetRestrictedIngredientTermsAsync(familyId, null, cancellationToken);
             var filtered = recipes.Where(recipe =>
                 (string.IsNullOrWhiteSpace(query) || recipe.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || (recipe.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)) &&
                 (string.IsNullOrWhiteSpace(cuisine) || string.Equals(recipe.Cuisine, cuisine, StringComparison.OrdinalIgnoreCase)) &&
                 (string.IsNullOrWhiteSpace(category) || string.Equals(recipe.Category, category, StringComparison.OrdinalIgnoreCase)) &&
                 (!maxPrepTime.HasValue || ((recipe.PrepTimeMinutes ?? 0) + (recipe.CookTimeMinutes ?? 0)) <= maxPrepTime.Value) &&
-                (tags.Count == 0 || tags.All(tag => recipe.Tags.Any(recipeTag => string.Equals(recipeTag, tag, StringComparison.OrdinalIgnoreCase)))))
+                (tags.Count == 0 || tags.All(tag => recipe.Tags.Any(recipeTag => string.Equals(recipeTag, tag, StringComparison.OrdinalIgnoreCase)))) &&
+                IsRecipeSafe(recipe, restrictedTerms))
                 .Take(8)
                 .ToList();
 
@@ -1013,6 +1117,14 @@ public sealed class ChatService : IChatService
                 return new ChatToolExecutionResult(
                     "That replacement recipe was not found in your cookbook.",
                     new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "Replacement recipe not found" });
+            }
+
+            var restrictedTerms = await GetRestrictedIngredientTermsAsync(familyId, userId, cancellationToken);
+            if (!IsRecipeSafe(replacementRecipe, restrictedTerms))
+            {
+                return new ChatToolExecutionResult(
+                    "That replacement recipe conflicts with allergy or exclusion constraints.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "Unsafe replacement" });
             }
 
             var nextMeals = currentPlan.Meals
@@ -1494,6 +1606,81 @@ public sealed class ChatService : IChatService
             }
 
             return ingredients;
+        }
+
+        private async Task<HashSet<string>> GetRestrictedIngredientTermsAsync(
+            string familyId,
+            string? userId,
+            CancellationToken cancellationToken)
+        {
+            var restricted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                var primaryProfile = await _profileRepository.GetAsync(new DynamoDbKey($"USER#{userId}", "PROFILE"), cancellationToken);
+                if (primaryProfile is not null)
+                {
+                    foreach (var allergen in primaryProfile.Allergies.Select(allergy => allergy.Allergen))
+                    {
+                        AddRestrictedTerm(restricted, allergen);
+                    }
+
+                    foreach (var excluded in primaryProfile.ExcludedIngredients)
+                    {
+                        AddRestrictedTerm(restricted, excluded);
+                    }
+                }
+            }
+
+            var dependents = await _dependentProfileService.ListByFamilyAsync(familyId, cancellationToken);
+            foreach (var dependent in dependents)
+            {
+                foreach (var allergen in dependent.Allergies.Select(allergy => allergy.Allergen))
+                {
+                    AddRestrictedTerm(restricted, allergen);
+                }
+
+                foreach (var avoided in dependent.AvoidedFoods)
+                {
+                    AddRestrictedTerm(restricted, avoided);
+                }
+            }
+
+            return restricted;
+        }
+
+        private static bool IsRecipeSafe(RecipeDocument recipe, IReadOnlySet<string> restrictedTerms)
+        {
+            if (restrictedTerms.Count == 0)
+            {
+                return true;
+            }
+
+            foreach (var ingredient in recipe.Ingredients)
+            {
+                var ingredientName = ingredient.Name;
+                if (string.IsNullOrWhiteSpace(ingredientName))
+                {
+                    continue;
+                }
+
+                if (restrictedTerms.Any(term => ingredientName.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void AddRestrictedTerm(ISet<string> restricted, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            restricted.Add(value.Trim());
         }
 
         private static JsonDocument ParseArguments(string argumentsJson)

@@ -41,6 +41,10 @@ public sealed class PendingConfirmationDocument
     public string ActionType { get; init; } = string.Empty;
 
     public string Prompt { get; init; } = string.Empty;
+
+    public string? ToolName { get; init; }
+
+    public string? ArgumentsJson { get; init; }
 }
 
 public sealed class ChatMessageRequest

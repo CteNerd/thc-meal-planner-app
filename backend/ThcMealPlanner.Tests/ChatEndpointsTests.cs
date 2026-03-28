@@ -105,6 +105,48 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
         payload!.AssistantMessage.Content.Should().Contain("No completed grocery items needed clearing");
     }
 
+    [Fact]
+    public async Task PostMessageStream_WithValidPayload_ReturnsEventStream()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("/api/chat/message/stream", new ChatMessageRequest
+        {
+            Message = "Suggest a quick dinner"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("text/event-stream");
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("event: conversation");
+        content.Should().Contain("event: message");
+        content.Should().Contain("event: done");
+    }
+
+    [Fact]
+    public async Task PostMessage_WhenCancelingPendingDestructiveAction_ReturnsCanceledMessage()
+    {
+        var client = CreateAuthenticatedClient();
+
+        await client.PostAsJsonAsync("/api/chat/message", new ChatMessageRequest
+        {
+            Message = "Clear completed grocery items",
+            ConversationId = "conv_cancel"
+        });
+
+        var cancelResponse = await client.PostAsJsonAsync("/api/chat/message", new ChatMessageRequest
+        {
+            Message = "Cancel",
+            ConversationId = "conv_cancel"
+        });
+
+        cancelResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await cancelResponse.Content.ReadFromJsonAsync<ChatMessageResponse>();
+        payload.Should().NotBeNull();
+        payload!.AssistantMessage.Content.Should().Contain("Canceled. I did not apply that action.");
+    }
+
     private HttpClient CreateAuthenticatedClient()
     {
         var chatRepository = new InMemoryRepository<ChatHistoryMessageDocument>();

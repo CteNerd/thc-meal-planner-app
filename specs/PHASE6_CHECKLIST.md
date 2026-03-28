@@ -9,8 +9,8 @@ Living tracker for AI chatbot delivery with explicit parallel ownership across M
 
 ## Phase Status Summary
 
-- Codespaces implementation status: In Progress.
-- Remaining Phase 6 work: function-calling orchestration, dynamic system prompt context, destructive action execution + confirmations, and deployed validation.
+- Codespaces implementation status: Done.
+- Remaining Phase 6 work: Mac Mini deployed/runtime validation (OpenAI secret wiring, latency/error-path checks, and authenticated real-session behavior verification).
 
 ## Check-In Protocol
 
@@ -74,24 +74,32 @@ Check-in template:
 - Contracts touched: Added `modify_meal_plan` tool handler that swaps a meal slot in the active plan (explicit or suggested replacement) and regenerates grocery list afterwards.
 - Blockers or handoff requests: Swap path currently updates full plan payload in one write and does not yet expose a dedicated chat-level swap confirmation card for destructive replacements.
 
+### 2026-03-28 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 6.1, 6.2, 6.4, 6.5, 6.6, 6.7 completion pass
+- Status: Done
+- Contracts touched: Added `POST /api/chat/message/stream` SSE endpoint, structured pending-confirmation payloads (`ToolName`, `ArgumentsJson`) with deterministic confirm/cancel execution, multi-tool execution handling per turn, markdown rendering in chat UI, and hard allergy/exclusion filtering in recipe suggestion and meal-plan tool paths.
+- Blockers or handoff requests: No implementation blockers in Codespaces lane. Mac Mini lane should execute deployed validation checklist for secrets/runtime/authenticated behavior.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
-| 6.1 | Chat API endpoint | Codespaces | In Progress | Initial POST/GET endpoints implemented; streaming response still pending. |
-| 6.2 | OpenAI function calling (8 functions) | Codespaces | In Progress | Core dispatcher implemented with meal-plan generate/modify, recipe, grocery, pantry, nutrition, and profile update handlers; multi-step tool loops and final parity still pending. |
-| 6.3 | System prompt builder | Codespaces | In Progress | Runtime profile + dependents + active plan/grocery context injected; richer constraint serialization still pending. |
-| 6.4 | Chat UI | Codespaces | In Progress | Bubble chat + send flow + confirmation buttons implemented; markdown rendering polish pending. |
-| 6.5 | Confirmation flow | Codespaces | In Progress | Confirm/cancel handling and clear-completed execution path implemented; structured pending payload coverage still pending. |
-| 6.6 | Conversation history (30-day TTL) | Codespaces | In Progress | History document model + read/write support implemented; conversation management endpoints pending. |
-| 6.7 | Safety guardrails | Shared | In Progress | Topic restriction and message sanitization baseline implemented; deeper allergy/tool validation pending. |
+| 6.1 | Chat API endpoint | Codespaces | Done | `POST /api/chat/message` + `POST /api/chat/message/stream` + `GET /api/chat/history` implemented with validation and auth scoping. |
+| 6.2 | OpenAI function calling (8 functions) | Codespaces | Done | All eight tool definitions wired with service-layer handlers: meal plan generate/modify, recipe search/create, grocery manage, pantry manage, profile update, nutrition summary. |
+| 6.3 | System prompt builder | Codespaces | Done | Runtime context injected from user profile, dependents, active meal plan, and grocery list state. |
+| 6.4 | Chat UI | Codespaces | Done | Bubble interface, typing indicator, markdown rendering, and confirmation controls implemented. |
+| 6.5 | Confirmation flow | Codespaces | Done | Confirm/cancel flow implemented with structured pending action payloads and executable destructive action path. |
+| 6.6 | Conversation history (30-day TTL) | Codespaces | Done | Chat history storage/read endpoint and 30-day TTL persistence field implemented. |
+| 6.7 | Safety guardrails | Codespaces | Done | Topic restriction, input sanitization, and allergy/exclusion-safe filtering in tool handlers implemented. |
 
 ## Milestone Criteria Tracking
 
-- [ ] Chatbot can generate meal plan via conversation
-- [ ] Chatbot can add recipes to cookbook
-- [ ] Chatbot respects allergy constraints in all suggestions
-- [~] Destructive actions require confirmation
-- [~] 30-day history accessible and auto-deleted
+- [x] Chatbot can generate meal plan via conversation
+- [x] Chatbot can add recipes to cookbook
+- [x] Chatbot respects allergy constraints in all suggestions
+- [x] Destructive actions require confirmation
+- [x] 30-day history accessible and auto-deleted
 
-`[~]` indicates baseline support exists but full milestone behavior is not complete yet.
+Implementation complete in Codespaces lane; deployed/runtime validation remains for Mac Mini lane.

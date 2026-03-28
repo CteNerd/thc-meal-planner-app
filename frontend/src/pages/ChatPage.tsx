@@ -119,7 +119,7 @@ export function ChatPage() {
                 : 'mr-auto border border-slate-200 bg-white text-slate-800'
             ].join(' ')}
           >
-            {message.content}
+            {message.role === 'assistant' ? <MarkdownMessage text={message.content} /> : message.content}
             {message.role === 'assistant' && message.requiresConfirmation ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
@@ -165,4 +165,28 @@ export function ChatPage() {
       </form>
     </Card>
   );
+}
+
+function MarkdownMessage({ text }: { text: string }) {
+  const html = toSafeHtml(text);
+
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function toSafeHtml(markdown: string): string {
+  const escaped = escapeHtml(markdown);
+
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code class="rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800">$1</code>')
+    .replace(/\n/g, '<br/>');
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
