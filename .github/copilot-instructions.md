@@ -53,9 +53,11 @@ store mappings, and migration payloads.
 
 ## Working Rules for Copilot Agents
 - Read relevant files under specs/ before proposing implementation details.
-- Keep pull requests small, test-backed, and reversible.
+- Keep change sets small, test-backed, and reversible.
+- Follow the active repository workflow in milestone/checklist docs (currently direct-to-main with frequent checkpoints).
 - Prefer explicit assumptions and call out unresolved ambiguity.
 - For destructive actions, require confirmation in UI and service layers.
 - Keep API contracts stable and document intentional breaking changes.
+- Run automated deployed validation checks before handing off manual validation items; record automated evidence in living phase checklists.
 - Provide a progress checkpoint at least every 20-30 minutes of active work.
 - At each checkpoint, update living checklist/backlog docs with completed items, blockers, and next actions.

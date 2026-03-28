@@ -5,7 +5,7 @@ Use for workflow design and CI/CD policy.
 
 ## Rules
 - Keep workflows deterministic and cache-aware.
-- Build, lint, and test backend and frontend on pull requests.
+- Build, lint, and test backend and frontend on pull requests and direct-to-main pushes when operating in checkpoint mode.
 - Enforce coverage gates at 80% minimum.
 - Run infrastructure validation with CDK synth/diff.
 - Keep deploy workflows environment-parameterized.
