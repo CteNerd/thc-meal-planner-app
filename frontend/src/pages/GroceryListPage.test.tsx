@@ -229,6 +229,22 @@ describe('GroceryListPage', () => {
     });
   });
 
+  it('recovers from toggle conflict by reloading latest list', async () => {
+    mockedGetCurrentGroceryList
+      .mockResolvedValueOnce(buildList())
+      .mockResolvedValueOnce(buildList({ version: 4, items: [{ ...buildList().items[0], checkedOff: true }] }));
+    mockedToggleGroceryItem.mockRejectedValue(new ApiError(409, 'Conflict', { detail: 'Version conflict' }));
+
+    render(<GroceryListPage />);
+
+    await screen.findByText('Tofu');
+    fireEvent.click(screen.getByLabelText('toggle checked Tofu'));
+
+    await waitFor(() => {
+      expect(mockedGetCurrentGroceryList).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('reorders section flow', async () => {
     render(<GroceryListPage />);
 
