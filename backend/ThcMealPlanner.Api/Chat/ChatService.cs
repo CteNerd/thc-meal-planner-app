@@ -30,6 +30,7 @@ public interface IChatService
 public sealed class ChatService : IChatService
 {
         private const string GenerateMealPlanToolName = "generate_meal_plan";
+        private const string ModifyMealPlanToolName = "modify_meal_plan";
         private const string SearchRecipesToolName = "search_recipes";
         private const string CreateRecipeToolName = "create_recipe";
         private const string ManageGroceryListToolName = "manage_grocery_list";
@@ -50,6 +51,22 @@ public sealed class ChatService : IChatService
                                     "weekStartDate":{"type":"string","description":"ISO date (Monday) for plan week"}
                                 },
                                 "required":["weekStartDate"]
+                            }
+                        }
+                    },
+                    {
+                        "type":"function",
+                        "function":{
+                            "name":"modify_meal_plan",
+                            "description":"Swap a specific meal in the active plan.",
+                            "parameters":{
+                                "type":"object",
+                                "properties":{
+                                    "day":{"type":"string"},
+                                    "mealType":{"type":"string"},
+                                    "newRecipeId":{"type":"string"}
+                                },
+                                "required":["day","mealType"]
                             }
                         }
                     },
@@ -802,6 +819,7 @@ public sealed class ChatService : IChatService
                 return toolCall.Name switch
                 {
                     GenerateMealPlanToolName => await ExecuteGenerateMealPlanAsync(toolCall.ArgumentsJson, familyId, userId, userName, cancellationToken),
+                    ModifyMealPlanToolName => await ExecuteModifyMealPlanAsync(toolCall.ArgumentsJson, familyId, userId, userName, cancellationToken),
                     SearchRecipesToolName => await ExecuteSearchRecipesAsync(toolCall.ArgumentsJson, familyId, cancellationToken),
                     CreateRecipeToolName => await ExecuteCreateRecipeAsync(toolCall.ArgumentsJson, familyId, userId, cancellationToken),
                     ManageGroceryListToolName => await ExecuteManageGroceryListAsync(toolCall.ArgumentsJson, familyId, userId, userName, cancellationToken),
@@ -920,6 +938,122 @@ public sealed class ChatService : IChatService
             return new ChatToolExecutionResult(
                 result,
                 new ChatActionDocument { Type = SearchRecipesToolName, Status = "succeeded", Result = $"{filtered.Count} matches" });
+        }
+
+        private async Task<ChatToolExecutionResult> ExecuteModifyMealPlanAsync(
+            string argumentsJson,
+            string familyId,
+            string userId,
+            string userName,
+            CancellationToken cancellationToken)
+        {
+            using var argsDoc = ParseArguments(argumentsJson);
+            var root = argsDoc.RootElement;
+
+            var day = root.TryGetProperty("day", out var dayElement) && dayElement.ValueKind == JsonValueKind.String
+                ? dayElement.GetString()
+                : null;
+            var mealType = root.TryGetProperty("mealType", out var mealTypeElement) && mealTypeElement.ValueKind == JsonValueKind.String
+                ? mealTypeElement.GetString()
+                : null;
+            var requestedRecipeId = root.TryGetProperty("newRecipeId", out var newRecipeElement) && newRecipeElement.ValueKind == JsonValueKind.String
+                ? newRecipeElement.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(day) || string.IsNullOrWhiteSpace(mealType))
+            {
+                return new ChatToolExecutionResult(
+                    "Please provide both day and mealType to modify the meal plan.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "Missing day or mealType" });
+            }
+
+            var currentPlan = await _mealPlanService.GetCurrentAsync(familyId, cancellationToken);
+            if (currentPlan is null)
+            {
+                return new ChatToolExecutionResult(
+                    "There is no active meal plan to modify.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "No active plan" });
+            }
+
+            var targetSlot = currentPlan.Meals.FirstOrDefault(slot =>
+                string.Equals(slot.Day, day, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(slot.MealType, mealType, StringComparison.OrdinalIgnoreCase));
+
+            if (targetSlot is null)
+            {
+                return new ChatToolExecutionResult(
+                    $"I couldn't find a {mealType} slot on {day} in the active plan.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "Slot not found" });
+            }
+
+            var nextRecipeId = requestedRecipeId;
+            if (string.IsNullOrWhiteSpace(nextRecipeId))
+            {
+                var suggestions = await _mealPlanService.SuggestSwapOptionsAsync(
+                    familyId,
+                    currentPlan.WeekStartDate,
+                    day,
+                    mealType,
+                    1,
+                    cancellationToken);
+
+                nextRecipeId = suggestions.FirstOrDefault()?.RecipeId;
+            }
+
+            if (string.IsNullOrWhiteSpace(nextRecipeId))
+            {
+                return new ChatToolExecutionResult(
+                    "I couldn't find a suitable replacement recipe for that slot.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "No replacement found" });
+            }
+
+            var replacementRecipe = await _recipeService.GetByIdAsync(familyId, nextRecipeId, cancellationToken);
+            if (replacementRecipe is null)
+            {
+                return new ChatToolExecutionResult(
+                    "That replacement recipe was not found in your cookbook.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "Replacement recipe not found" });
+            }
+
+            var nextMeals = currentPlan.Meals
+                .Select(slot =>
+                {
+                    var isTarget = string.Equals(slot.Day, day, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(slot.MealType, mealType, StringComparison.OrdinalIgnoreCase);
+
+                    return new CreateMealSlotRequest
+                    {
+                        Day = slot.Day,
+                        MealType = slot.MealType,
+                        RecipeId = isTarget ? replacementRecipe.RecipeId : slot.RecipeId,
+                        Servings = slot.Servings
+                    };
+                })
+                .ToList();
+
+            var updated = await _mealPlanService.UpdateAsync(
+                familyId,
+                currentPlan.WeekStartDate,
+                new UpdateMealPlanRequest { Meals = nextMeals },
+                cancellationToken);
+
+            if (updated is null)
+            {
+                return new ChatToolExecutionResult(
+                    "I couldn't update the active meal plan right now.",
+                    new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "failed", Result = "Update failed" });
+            }
+
+            await _groceryListService.GenerateAsync(
+                familyId,
+                userId,
+                userName,
+                new GenerateGroceryListRequest { WeekStartDate = currentPlan.WeekStartDate, ClearExisting = false },
+                cancellationToken);
+
+            return new ChatToolExecutionResult(
+                $"Updated {day} {mealType} to **{replacementRecipe.Name}** and refreshed the grocery list.",
+                new ChatActionDocument { Type = ModifyMealPlanToolName, Status = "succeeded", Result = replacementRecipe.RecipeId });
         }
 
         private async Task<ChatToolExecutionResult> ExecuteCreateRecipeAsync(

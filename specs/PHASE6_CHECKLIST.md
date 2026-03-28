@@ -66,12 +66,20 @@ Check-in template:
 - Contracts touched: Added `update_profile` tool definition and execution path in chat service with family-scope checks and safe partial updates for profile fields.
 - Blockers or handoff requests: Profile tool currently updates a limited subset of fields and does not yet support dependent profile mutation or validator-backed patch semantics.
 
+### 2026-03-28 - Codespaces lane
+
+- Lane: Codespaces
+- Task: 6.2 additional tool coverage (`modify_meal_plan`)
+- Status: In Progress
+- Contracts touched: Added `modify_meal_plan` tool handler that swaps a meal slot in the active plan (explicit or suggested replacement) and regenerates grocery list afterwards.
+- Blockers or handoff requests: Swap path currently updates full plan payload in one write and does not yet expose a dedicated chat-level swap confirmation card for destructive replacements.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
 | 6.1 | Chat API endpoint | Codespaces | In Progress | Initial POST/GET endpoints implemented; streaming response still pending. |
-| 6.2 | OpenAI function calling (8 functions) | Codespaces | In Progress | Core dispatcher implemented with meal-plan, recipe, grocery, pantry, nutrition, and profile update handlers; missing modify_meal_plan and broader multi-step loops. |
+| 6.2 | OpenAI function calling (8 functions) | Codespaces | In Progress | Core dispatcher implemented with meal-plan generate/modify, recipe, grocery, pantry, nutrition, and profile update handlers; multi-step tool loops and final parity still pending. |
 | 6.3 | System prompt builder | Codespaces | In Progress | Runtime profile + dependents + active plan/grocery context injected; richer constraint serialization still pending. |
 | 6.4 | Chat UI | Codespaces | In Progress | Bubble chat + send flow + confirmation buttons implemented; markdown rendering polish pending. |
 | 6.5 | Confirmation flow | Codespaces | In Progress | Confirm/cancel handling and clear-completed execution path implemented; structured pending payload coverage still pending. |
