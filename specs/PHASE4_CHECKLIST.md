@@ -57,8 +57,14 @@ Check-in template:
 
 - Backend local validation: `dotnet build` passed and `dotnet test` passed (`110 passed, 0 failed`).
 - Frontend local validation: `npm run test -- --run` passed (`7 files, 30 tests`) and `npm run build` passed.
-- Deployed baseline verification: dev `/api/health` now returns `200` via API Gateway and CloudFront, and unauthenticated protected routes return `401`.
-- Remaining runtime verification: deployed OpenAI/config wiring and real authenticated smoke checks for generation/swap/history behavior.
+- Automated deployed validation (complete):
+	- Dev `/api/health` returns `200` via API Gateway and CloudFront.
+	- Unauthenticated protected routes return `401` (auth gate enforced in deployed runtime).
+	- CORS preflight `OPTIONS` behavior is verified for core API paths in deployed runtime.
+- Manual validation (pending):
+	- Authenticated meal generation against live OpenAI configuration.
+	- Authenticated swap/history round-trip in deployed UI with persistence verification.
+	- Constraint-quality checks with real profile + recipe data (allergen/prohibited ingredient confirmations).
 
 ## Status Board
 

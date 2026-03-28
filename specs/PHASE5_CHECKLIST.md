@@ -74,6 +74,14 @@ Check-in template:
 - Contracts touched: Restored dev API runtime by correcting Lambda event source alignment in API hosting, ensuring Lambda custom runtime bootstrap packaging, and deploying a self-contained `linux-arm64` publish artifact.
 - Blockers or handoff requests: Runtime 502 blocker is cleared. Remaining validation requires authenticated user-session testing for multi-user polling/conflict behavior and meal-change grocery reactivity.
 
+### 2026-03-28 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: Phase 5 automated deployed validation sweep
+- Status: Done
+- Contracts touched: Verified API Gateway and CloudFront health/auth/CORS behavior; verified Lambda recent logs are free of new runtime exceptions during smoke run.
+- Blockers or handoff requests: Remaining checks are manual authenticated multi-user behavior.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
@@ -103,7 +111,14 @@ Check-in template:
 
 - Backend local validation: `dotnet test backend/ThcMealPlanner.Tests/ThcMealPlanner.Tests.csproj` passed (`121 passed, 0 failed`).
 - Frontend local validation: `npm run test -- --run` passed (`8 files, 39 tests`) and `npm run build` passed.
-- Deployed runtime baseline validation: `GET /api/health` returns `200` on both API Gateway and CloudFront endpoints.
-- Deployed auth-gate validation: unauthenticated `GET /api/session` and `GET /api/grocery-lists/current` return `401` on both API Gateway and CloudFront endpoints.
+- Automated deployed validation (complete):
+	- `GET /api/health` returns `200` on API Gateway and CloudFront.
+	- Unauthenticated `GET /api/session`, `GET /api/grocery-lists/current`, and `GET /api/meal-plans/current` return `401` on API Gateway and CloudFront.
+	- CORS preflight `OPTIONS` on `/api/health` and `/api/session` returns `204` with expected allow headers/methods.
+	- Lambda log tail (`last 10m`) shows no new runtime errors/exceptions during smoke run.
+- Manual validation (pending):
+	- Two authenticated users observe near real-time shared state updates when checking/unchecking grocery items.
+	- Two-user conflict interaction is validated in live UI sessions under concurrent edits.
+	- Meal create/generate/swap changes are observed to recalculate grocery deltas correctly in deployed authenticated sessions.
 
-`[~]` indicates local implementation in progress with deployed verification still pending.
+`[~]` indicates manual authenticated validation is still pending.
