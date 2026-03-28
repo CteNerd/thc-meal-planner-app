@@ -1,5 +1,6 @@
 import { CfnOutput, Stack } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { DotnetLambdaFunction } from '../constructs/lambda-function';
 import type { ApiOutputs, ApiStackProps } from './stack-props';
@@ -24,6 +25,9 @@ export class ApiStack extends Stack {
         RECIPE_IMAGES_BUCKET: props.data.recipeImagesBucketName
       }
     });
+
+    const recipeImagesBucket = s3.Bucket.fromBucketName(this, 'RecipeImagesBucket', props.data.recipeImagesBucketName);
+    recipeImagesBucket.grantReadWrite(handler.function);
 
     const api = new apigateway.LambdaRestApi(this, 'RestApi', {
       restApiName: `${prefix}-api`,

@@ -14,6 +14,8 @@ export class FrontendStack extends Stack {
       enforceSSL: true
     });
 
+    const recipeImagesBucket = s3.Bucket.fromBucketName(this, 'RecipeImagesBucket', props.data.recipeImagesBucketName);
+
     const apiUrlParts = Fn.split('/', props.api.apiUrl);
     const apiDomainName = Fn.select(2, apiUrlParts);
     const apiStagePath = Fn.join('', ['/', Fn.select(3, apiUrlParts)]);
@@ -36,6 +38,14 @@ export class FrontendStack extends Stack {
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS
+        },
+        'images/*': {
+          origin: origins.S3BucketOrigin.withOriginAccessControl(recipeImagesBucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          compress: true
         }
       },
       errorResponses: [

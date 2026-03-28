@@ -1,5 +1,6 @@
 import { CfnOutput, Stack } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { DynamoTable } from '../constructs/dynamo-table';
@@ -77,6 +78,21 @@ export class DataStack extends Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true
     });
+
+    recipeImagesBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudFrontReadRecipeImages',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:GetObject'],
+        resources: [recipeImagesBucket.arnForObjects('*')],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceAccount': this.account
+          }
+        }
+      })
+    );
 
     this.outputs = {
       tableNames,

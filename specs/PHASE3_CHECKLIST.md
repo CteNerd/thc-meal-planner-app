@@ -53,12 +53,23 @@ Check-in template:
 - Contracts touched: Finalized frontend recipe page tests, explicit Vitest/jest-dom matcher typing, and Phase 3 documentation alignment for lane handoff.
 - Blockers or handoff requests: Codespaces scope is complete. Mac Mini lane still owns deployed image/upload validation, CloudFront image serving checks, real-world URL import smoke tests, and recipe migration after explicit record confirmation.
 
+### 2026-03-23 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: 3.6, 3.8 runtime contracts and deployment verification
+- Status: In Progress
+- Contracts touched: Confirmed `RECIPE_IMAGES_BUCKET` on API Lambda (`thc-meal-planner-dev-api-handler`), added and verified Lambda IAM object permissions (`s3:GetObject`, `s3:PutObject`) on `thc-meal-planner-dev-recipe-images/*`, added CloudFront `images/*` behavior on `d3ugym4rb87yys.cloudfront.net`, and added DataStack bucket policy statement `AllowCloudFrontReadRecipeImages` for `cloudfront.amazonaws.com` `s3:GetObject`.
+- Blockers or handoff requests: Remaining work is manual runtime smoke validation in authenticated UI/API sessions (real recipe create/upload and URL import checks), plus recipe migration confirmation before any migration write/execute steps.
+
 ## Validation Status
 
 - Codespaces local backend validation: `dotnet test` passed.
 - Codespaces local frontend validation: `vitest` passed (`6 files, 25 tests`) after final syntax/test harness fixes.
 - Codespaces commit status: latest Phase 3 frontend test fixes committed and pushed to `main`.
-- Remaining runtime validation: GitHub Actions run, deployed upload URL behavior against real AWS resources, CloudFront image serving, post-deploy recipe import smoke test, and recipe migration after explicit record confirmation.
+- Mac Mini local backend validation: `dotnet test` passed (`64 passed, 0 failed`).
+- Mac Mini local frontend validation: `npm run test` passed (`6 files, 25 tests`) and `npm run build` passed.
+- Mac Mini AWS contract verification: PASS for Lambda env var, Lambda S3 object permissions, CloudFront `images/*` behavior, and recipe-images bucket CloudFront read policy.
+- Remaining runtime validation: authenticated end-to-end recipe image upload smoke test (`imageKey` persistence + `/images/recipes/{recipeId}/{file}` retrieval), live URL import quality smoke tests on external pages, and recipe migration after explicit record confirmation.
 
 ## Closeout Summary
 
@@ -71,13 +82,13 @@ Check-in template:
 | Item | Description | Primary Owner | Status | Evidence / Notes |
 |---|---|---|---|---|
 | 3.1 | Recipe API endpoints (CRUD) | Codespaces | Done | Backend CRUD routes, validators, service layer, and endpoint tests implemented locally. |
-| 3.2 | Recipe migration (6 existing recipes) | Mac Mini | Not Started | Requires record confirmation and migration execution in AWS-backed lane. |
+| 3.2 | Recipe migration (2 initial recipes) | Mac Mini | In Progress | Scope updated by user for current migration wave: Breakfast Burrito + Grilled Chicken Salad. Migration execution still requires explicit record-by-record approval before writes. |
 | 3.3 | Cookbook browse UI | Codespaces | Done | Browse grid, search, category filter, favorites-only toggle, and recipe navigation added. |
 | 3.4 | Recipe detail page | Codespaces | Done | Detail route, ingredients checklist, nutrition panel, source metadata, and favorite toggle added. |
 | 3.5 | Add/edit recipe form | Codespaces | Done | Create/edit routes, recipe editor form, import draft review, and direct image upload client flow added. |
-| 3.6 | Image upload | Shared | In Progress | Codespaces implementation is done; Mac Mini must validate S3 bucket, IAM, and CloudFront `/images/*` runtime behavior before overall Phase 3 signoff. |
+| 3.6 | Image upload | Shared | In Progress | Contract-level AWS validation now complete (Lambda env/IAM + CloudFront `images/*` + bucket policy). Remaining step is authenticated runtime smoke: create recipe, upload image, confirm persisted `imageKey`, and confirm CloudFront retrieval path. |
 | 3.7 | Favorites API + UI | Codespaces | Done | Favorite toggle/list endpoints and browse/detail favorite UI covered by tests. |
-| 3.8 | Recipe import from URL | Codespaces | Done | SSRF-protected URL fetch, JSON-LD + fallback parsing, and parser unit tests implemented; Mac Mini should still perform deployed real-world quality smoke tests. |
+| 3.8 | Recipe import from URL | Codespaces | Done | SSRF-protected URL fetch, JSON-LD + fallback parsing, and parser unit tests implemented; Mac Mini still needs deployed real-world quality smoke tests for parse quality. |
 
 ## Mac Mini Handoff
 
@@ -103,7 +114,7 @@ Run these after syncing the latest Codespaces commit:
 
 ## Milestone Criteria Tracking
 
-- [ ] 6 migrated recipes visible in cookbook
+- [ ] 2 migrated recipes visible in cookbook (current approved wave)
 - [~] New recipes can be created with images
 - [x] Favorites toggle works for both users
 - [x] URL import produces parseable recipe structure
