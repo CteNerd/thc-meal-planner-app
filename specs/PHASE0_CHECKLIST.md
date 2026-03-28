@@ -24,7 +24,7 @@ Use these labels for Phase 0 tracking issues:
 | 0.6 | Add skills (15) | Done | Files under `.github/skills/` |
 | 0.7 | Add `copilot-setup-steps.yml` workflow | Done | `.github/workflows/copilot-setup-steps.yml` |
 | 0.8 | Ensure `specs/` docs are available to agents | Done | `specs/` folder in repository |
-| 0.9 | Verify agent functionality in practice | In Progress | Phase 1 scaffolding exists; CI workflow run `23411889262` passed after scaffolding fixes. Domain and engineering prompt validation still pending. |
+| 0.9 | Verify agent functionality in practice | In Progress | Phase 1 scaffolding exists; CI workflow run `23411889262` passed after scaffolding fixes. Domain and engineering prompt validation completed on `2026-03-28`; coding-agent issue pickup/resolution validation still pending. |
 
 ## Milestone Criteria Validation
 
@@ -33,7 +33,7 @@ Use these labels for Phase 0 tracking issues:
 - [x] All 8 instruction files are present.
 - [x] All 15 skill files are present.
 - [ ] Copilot coding agent test issue picked up and resolved.
-- [ ] Agent behavior validated with domain prompts.
+- [x] Agent behavior validated with domain prompts.
 
 ## Backlog Issue Plan
 

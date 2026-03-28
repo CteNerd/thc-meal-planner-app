@@ -10,7 +10,7 @@ Living tracker for grocery list generation, live sync, and optimistic concurrenc
 ## Phase Status Summary
 
 - Codespaces implementation status: Complete.
-- Remaining Phase 5 work: Shared/Mac Mini deployed validation for real-session behavior, live multi-user sync, and production-like runtime verification.
+- Remaining Phase 5 work: Shared/Mac Mini authenticated real-session behavior validation for live multi-user sync and meal-change reactivity.
 
 ## Check-In Protocol
 
@@ -66,6 +66,14 @@ Check-in template:
 - Contracts touched: Added focused backend service tests for grocery delta recalculation after meal-plan changes and pantry in-stock mapping; added frontend test for 409 conflict recovery refresh path; revalidated backend/frontend test + build pipelines.
 - Blockers or handoff requests: None on implementation quality. Remaining work is deployed multi-user/runtime verification in Mac Mini lane.
 
+### 2026-03-28 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: Phase 5 deployed runtime baseline validation and blocker resolution
+- Status: Done
+- Contracts touched: Restored dev API runtime by correcting Lambda event source alignment in API hosting, ensuring Lambda custom runtime bootstrap packaging, and deploying a self-contained `linux-arm64` publish artifact.
+- Blockers or handoff requests: Runtime 502 blocker is cleared. Remaining validation requires authenticated user-session testing for multi-user polling/conflict behavior and meal-change grocery reactivity.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
@@ -95,5 +103,7 @@ Check-in template:
 
 - Backend local validation: `dotnet test backend/ThcMealPlanner.Tests/ThcMealPlanner.Tests.csproj` passed (`121 passed, 0 failed`).
 - Frontend local validation: `npm run test -- --run` passed (`8 files, 39 tests`) and `npm run build` passed.
+- Deployed runtime baseline validation: `GET /api/health` returns `200` on both API Gateway and CloudFront endpoints.
+- Deployed auth-gate validation: unauthenticated `GET /api/session` and `GET /api/grocery-lists/current` return `401` on both API Gateway and CloudFront endpoints.
 
 `[~]` indicates local implementation in progress with deployed verification still pending.

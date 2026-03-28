@@ -10,7 +10,7 @@ using ThcMealPlanner.Infrastructure;
 var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.Services.AddProblemDetails();
-builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.RestApi);
 builder.Services.AddCognitoAuthentication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();

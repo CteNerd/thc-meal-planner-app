@@ -69,6 +69,7 @@ Check-in template:
 - Mac Mini local backend validation: `dotnet test` passed (`64 passed, 0 failed`).
 - Mac Mini local frontend validation: `npm run test` passed (`6 files, 25 tests`) and `npm run build` passed.
 - Mac Mini AWS contract verification: PASS for Lambda env var, Lambda S3 object permissions, CloudFront `images/*` behavior, and recipe-images bucket CloudFront read policy.
+- Mac Mini deployed baseline verification: PASS for dev `/api/health` returning `200` via API Gateway and CloudFront, with unauthenticated protected routes returning `401`.
 - Remaining runtime validation: authenticated end-to-end recipe image upload smoke test (`imageKey` persistence + `/images/recipes/{recipeId}/{file}` retrieval), live URL import quality smoke tests on external pages, and recipe migration after explicit record confirmation.
 
 ## Closeout Summary
