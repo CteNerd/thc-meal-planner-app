@@ -7,7 +7,9 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http.Json;
 using ThcMealPlanner.Api.Chat;
+using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
+using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Core.Data;
 
 namespace ThcMealPlanner.Tests;
@@ -93,10 +95,16 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
                 services.AddSingleton<IDynamoDbRepository<ChatHistoryMessageDocument>>(chatRepository);
                 services.AddScoped<IValidator<ChatMessageRequest>, ChatMessageRequestValidator>();
                 services.AddSingleton<IOpenAiApiKeyProvider, NoOpOpenAiApiKeyProvider>();
+                services.AddSingleton<IMealPlanService, NoOpMealPlanService>();
+                services.AddSingleton<IRecipeService, NoOpRecipeService>();
+                services.AddSingleton<IGroceryListService, NoOpGroceryListService>();
                 services.AddScoped<IChatService>(sp => new ChatService(
                     chatRepository,
                     sp.GetRequiredService<IOpenAiApiKeyProvider>(),
                     Options.Create(new OpenAiOptions()),
+                    sp.GetRequiredService<IMealPlanService>(),
+                    sp.GetRequiredService<IRecipeService>(),
+                    sp.GetRequiredService<IGroceryListService>(),
                     new HttpClient(),
                     sp.GetRequiredService<ILogger<ChatService>>()));
             });
@@ -164,5 +172,68 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
         }
 
         private static string ToCompositeKey(DynamoDbKey key) => $"{key.PartitionKey}|{key.SortKey}";
+    }
+
+    private sealed class NoOpMealPlanService : IMealPlanService
+    {
+        public Task<MealPlanDocument?> GetCurrentAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<MealPlanDocument?>(null);
+
+        public Task<MealPlanDocument?> GetByWeekAsync(string familyId, string weekStartDate, CancellationToken cancellationToken = default) => Task.FromResult<MealPlanDocument?>(null);
+
+        public Task<IReadOnlyList<MealPlanDocument>> GetHistoryAsync(string familyId, int limit = 10, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MealPlanDocument>>([]);
+
+        public Task<MealPlanDocument> CreateAsync(string familyId, string userId, CreateMealPlanRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new MealPlanDocument());
+
+        public Task<MealPlanDocument> GenerateAsync(string familyId, string userId, GenerateMealPlanRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new MealPlanDocument());
+
+        public Task<IReadOnlyList<MealSwapSuggestion>> SuggestSwapOptionsAsync(string familyId, string weekStartDate, string day, string mealType, int limit = 5, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MealSwapSuggestion>>([]);
+
+        public Task<MealPlanDocument?> UpdateAsync(string familyId, string weekStartDate, UpdateMealPlanRequest request, CancellationToken cancellationToken = default) => Task.FromResult<MealPlanDocument?>(null);
+
+        public Task<bool> DeleteAsync(string familyId, string weekStartDate, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    }
+
+    private sealed class NoOpRecipeService : IRecipeService
+    {
+        public Task<IReadOnlyList<RecipeDocument>> ListByFamilyAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RecipeDocument>>([]);
+
+        public Task<RecipeDocument?> GetByIdAsync(string familyId, string recipeId, CancellationToken cancellationToken = default) => Task.FromResult<RecipeDocument?>(null);
+
+        public Task<RecipeDocument> CreateAsync(string familyId, string userId, CreateRecipeRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new RecipeDocument());
+
+        public Task<RecipeDocument?> UpdateAsync(string familyId, string recipeId, UpdateRecipeRequest request, CancellationToken cancellationToken = default) => Task.FromResult<RecipeDocument?>(null);
+
+        public Task<bool> DeleteAsync(string familyId, string recipeId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+        public Task<FavoriteRecipeDocument?> AddFavoriteAsync(string familyId, string userId, string recipeId, FavoriteRecipeRequest request, CancellationToken cancellationToken = default) => Task.FromResult<FavoriteRecipeDocument?>(null);
+
+        public Task RemoveFavoriteAsync(string userId, string recipeId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<FavoriteRecipeDocument>> ListFavoritesAsync(string userId, string? category, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<FavoriteRecipeDocument>>([]);
+    }
+
+    private sealed class NoOpGroceryListService : IGroceryListService
+    {
+        public Task<GroceryListDocument?> GetCurrentAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<GroceryListDocument?>(null);
+
+        public Task<GroceryListDocument> GenerateAsync(string familyId, string userId, string? userName, GenerateGroceryListRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new GroceryListDocument());
+
+        public Task<GroceryItemMutationResult> ToggleItemAsync(string familyId, string itemId, string userId, string? userName, ToggleGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+
+        public Task<GroceryItemMutationResult> AddItemAsync(string familyId, AddGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundList);
+
+        public Task<GroceryItemMutationResult> SetInStockAsync(string familyId, string itemId, SetInStockRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+
+        public Task<GroceryItemMutationResult> RemoveItemAsync(string familyId, string itemId, RemoveGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+
+        public Task<GroceryListPollResult> PollAsync(string familyId, DateTimeOffset? since, CancellationToken cancellationToken = default) => Task.FromResult(GroceryListPollResult.NotFound);
+
+        public Task<PantryStaplesDocument> GetPantryStaplesAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
+
+        public Task<PantryStaplesDocument> ReplacePantryStaplesAsync(string familyId, ReplacePantryStaplesRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId, Items = request.Items });
+
+        public Task<PantryStaplesDocument> AddPantryStapleAsync(string familyId, AddPantryStapleItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
+
+        public Task<bool> DeletePantryStapleAsync(string familyId, string name, CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 }
