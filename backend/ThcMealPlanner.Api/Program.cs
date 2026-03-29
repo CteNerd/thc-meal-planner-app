@@ -76,6 +76,7 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseAuthentication();
+app.UseMiddleware<UserProfileClaimsEnrichmentMiddleware>();
 app.UseAuthorization();
 
 app.MapGet("/api/health", () =>

@@ -70,6 +70,31 @@ public sealed class ProfileEndpointsTests : IClassFixture<WebApplicationFactory<
     }
 
     [Fact]
+    public async Task GetProfile_WhenFamilyClaimMissing_ResolvesClaimsFromStoredProfile()
+    {
+        var repository = new InMemoryProfileRepository();
+        await repository.PutAsync(
+            new DynamoDbKey("USER#test-user-123", "PROFILE"),
+            new UserProfileDocument
+            {
+                UserId = "test-user-123",
+                Name = "Adult 1",
+                Email = "adult1@example.com",
+                FamilyId = "FAM#test-family",
+                Role = "head_of_household"
+            });
+
+        var client = CreateMissingClaimsClient(repository);
+
+        var response = await client.GetAsync("/api/profile");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var profile = await response.Content.ReadFromJsonAsync<UserProfileDocument>();
+        profile.Should().NotBeNull();
+        profile!.FamilyId.Should().Be("FAM#test-family");
+    }
+
+    [Fact]
     public async Task PutProfile_WithValidPayload_UpsertsAndReturnsProfile()
     {
         var client = CreateAuthenticatedClient(new InMemoryProfileRepository());

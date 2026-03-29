@@ -21,6 +21,7 @@ public sealed class MissingClaimsAuthHandler : AuthenticationHandler<Authenticat
     {
         var claims = new[]
         {
+            new Claim("sub", "test-user-123"),
             new Claim("email", "unknown@example.com"),
             new Claim("name", "Unknown User")
         };
