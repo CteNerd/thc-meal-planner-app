@@ -1,9 +1,11 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using Amazon.SimpleEmailV2;
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
 using ThcMealPlanner.Api.Chat;
 using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
+using ThcMealPlanner.Api.Notifications;
 using ThcMealPlanner.Api.Profiles;
 using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Infrastructure;
@@ -20,6 +22,9 @@ builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>();
 builder.Services.AddHttpClient<IMealPlanAiService, MealPlanAiService>();
 builder.Services.AddHttpClient<IChatService, ChatService>();
 builder.Services.AddScoped<IRecipeImageUploadService, RecipeImageUploadService>();
+builder.Services.AddSingleton<IAmazonSimpleEmailServiceV2, AmazonSimpleEmailServiceV2Client>();
+builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
+builder.Services.AddScoped<INotificationService, SesNotificationService>();
 builder.Services.Configure<OpenAiOptions>(options =>
 {
     builder.Configuration.GetSection(OpenAiOptions.SectionName).Bind(options);
@@ -49,11 +54,27 @@ builder.Services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequ
 builder.Services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
 builder.Services.AddScoped<IValidator<ChatMessageRequest>, ChatMessageRequestValidator>();
+builder.Services.AddScoped<IValidator<SendTestNotificationRequest>, SendTestNotificationRequestValidator>();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+    context.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+    context.Response.Headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    context.Response.Headers.TryAdd("X-Permitted-Cross-Domain-Policies", "none");
+    context.Response.Headers.TryAdd("Cross-Origin-Opener-Policy", "same-origin");
+    context.Response.Headers.TryAdd("Cross-Origin-Resource-Policy", "same-site");
+    context.Response.Headers.TryAdd(
+        "Content-Security-Policy",
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+
+    await next();
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -89,6 +110,7 @@ authenticatedApi.MapMealPlanEndpoints();
 authenticatedApi.MapGroceryListEndpoints();
 authenticatedApi.MapPantryEndpoints();
 authenticatedApi.MapChatEndpoints();
+authenticatedApi.MapNotificationEndpoints();
 
 app.Run();
 

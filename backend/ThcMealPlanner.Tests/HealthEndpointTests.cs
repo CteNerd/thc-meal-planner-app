@@ -22,6 +22,10 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
         var response = await client.GetAsync("/api/health");
 
         response.IsSuccessStatusCode.Should().BeTrue();
+        response.Headers.GetValues("X-Content-Type-Options").Should().ContainSingle("nosniff");
+        response.Headers.GetValues("X-Frame-Options").Should().ContainSingle("DENY");
+        response.Headers.GetValues("Referrer-Policy").Should().ContainSingle("no-referrer");
+        response.Headers.GetValues("Content-Security-Policy").Should().ContainSingle();
     }
 
     [Fact]
