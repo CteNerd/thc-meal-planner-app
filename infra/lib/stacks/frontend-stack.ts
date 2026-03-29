@@ -1,6 +1,9 @@
 import { CfnOutput, Duration, Fn, Stack } from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import type { FrontendStackProps } from './stack-props';
@@ -49,8 +52,29 @@ export class FrontendStack extends Stack {
       }
     });
 
+    const { domainName, hostedZoneId, hostedZoneName } = props.deploymentConfig;
+    const hasCustomDomain = !!(domainName && hostedZoneId && hostedZoneName);
+
+    let certificate: acm.ICertificate | undefined;
+    let hostedZone: route53.IHostedZone | undefined;
+
+    if (hasCustomDomain) {
+      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+        hostedZoneId: hostedZoneId!,
+        zoneName: hostedZoneName!
+      });
+      certificate = new acm.Certificate(this, 'FrontendCertificate', {
+        domainName: domainName!,
+        validation: acm.CertificateValidation.fromDns(hostedZone)
+      });
+    }
+
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       defaultRootObject: 'index.html',
+      ...(hasCustomDomain && {
+        domainNames: [domainName!],
+        certificate: certificate!
+      }),
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -94,6 +118,15 @@ export class FrontendStack extends Stack {
         }
       ]
     });
+
+    if (hasCustomDomain && hostedZone) {
+      new route53.ARecord(this, 'FrontendAliasRecord', {
+        zone: hostedZone,
+        recordName: domainName!,
+        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution))
+      });
+      new CfnOutput(this, 'CustomDomainName', { value: `https://${domainName}` });
+    }
 
     new CfnOutput(this, 'DistributionDomainName', { value: distribution.distributionDomainName });
     new CfnOutput(this, 'FrontendBucketName', { value: frontendBucket.bucketName });

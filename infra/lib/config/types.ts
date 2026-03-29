@@ -3,6 +3,8 @@ export type DeploymentConfig = {
   account?: string;
   region: string;
   domainName?: string;
+  hostedZoneId?: string;
+  hostedZoneName?: string;
   lambda: {
     memory: number;
     timeout: number;
