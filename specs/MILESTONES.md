@@ -300,6 +300,9 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 | 7.8 | Production deployment | CDK deploy to prod, custom domain setup (optional), budget alarm |
 | 7.9 | Migration to production | Run migration script against prod tables, validate |
 
+Tracking doc: [PHASE7_CHECKLIST.md](PHASE7_CHECKLIST.md)
+Mac Mini execution commands: [PHASE7_MACMINI_EXECUTION.md](PHASE7_MACMINI_EXECUTION.md)
+
 ### Milestone Criteria
 - Email notifications send for meal plan completion
 - PWA installable on mobile
