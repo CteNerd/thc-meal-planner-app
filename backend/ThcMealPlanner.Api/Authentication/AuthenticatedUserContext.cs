@@ -15,6 +15,14 @@ public sealed record AuthenticatedUserContext(
 
 public static class AuthenticatedUserContextResolver
 {
+    private static readonly string[] SubClaimTypes =
+    [
+        "sub",
+        ClaimTypes.NameIdentifier,
+        "nameidentifier",
+        "cognito:username"
+    ];
+
     private static readonly string[] FamilyIdClaimTypes =
     [
         "custom:familyId",
@@ -33,7 +41,7 @@ public static class AuthenticatedUserContextResolver
 
     public static AuthenticatedUserContext? TryResolve(ClaimsPrincipal user)
     {
-        var sub = FindFirstValue(user, "sub");
+        var sub = FindFirstValue(user, SubClaimTypes);
         var email = FindFirstValue(user, "email");
         var name = FindFirstValue(user, "name");
         var familyId = FindFirstValue(user, FamilyIdClaimTypes);
@@ -55,6 +63,11 @@ public static class AuthenticatedUserContextResolver
     public static string? FindFamilyId(ClaimsPrincipal user)
     {
         return FindFirstValue(user, FamilyIdClaimTypes);
+    }
+
+    public static string? FindSub(ClaimsPrincipal user)
+    {
+        return FindFirstValue(user, SubClaimTypes);
     }
 
     public static string? FindRole(ClaimsPrincipal user)

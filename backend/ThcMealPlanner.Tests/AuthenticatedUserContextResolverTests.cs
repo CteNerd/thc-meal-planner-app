@@ -60,6 +60,21 @@ public sealed class AuthenticatedUserContextResolverTests
     }
 
     [Fact]
+    public void TryResolve_WithNameIdentifierSubClaim_ResolvesContext()
+    {
+        var principal = BuildPrincipal(
+            new Claim(ClaimTypes.NameIdentifier, "user-123"),
+            new Claim("custom:familyId", "FAM#abc"),
+            new Claim("custom:role", "head_of_household"));
+
+        var context = AuthenticatedUserContextResolver.TryResolve(principal);
+
+        context.Should().NotBeNull();
+        context!.Sub.Should().Be("user-123");
+        context.FamilyId.Should().Be("FAM#abc");
+    }
+
+    [Fact]
     public void TryResolve_WhenSubMissing_ReturnsNull()
     {
         var principal = BuildPrincipal(new Claim("custom:familyId", "FAM#abc"));

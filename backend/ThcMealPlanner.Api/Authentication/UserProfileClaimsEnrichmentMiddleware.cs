@@ -23,7 +23,7 @@ public sealed class UserProfileClaimsEnrichmentMiddleware
 
         if (user.Identity?.IsAuthenticated == true)
         {
-            var sub = user.FindFirstValue("sub");
+            var sub = AuthenticatedUserContextResolver.FindSub(user);
             var familyId = AuthenticatedUserContextResolver.FindFamilyId(user);
 
             if (!string.IsNullOrWhiteSpace(sub) && string.IsNullOrWhiteSpace(familyId))

@@ -19,6 +19,7 @@ public static class CognitoAuthenticationServiceCollectionExtensions
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(optionsBuilder =>
             {
+                optionsBuilder.MapInboundClaims = false;
                 optionsBuilder.Authority = authority;
                 optionsBuilder.TokenValidationParameters = new TokenValidationParameters
                 {
