@@ -145,10 +145,17 @@ Check-in template:
 
 ### 7.9 Migration to production
 
-- [ ] Precondition: present proposed migration records and obtain explicit user confirmation before commit/deploy/execution.
-- [ ] Codespaces: prepare migration scripts and dry-run validation tooling (no production execution).
-- [ ] Mac Mini: execute production migration after explicit confirmation and capture row-level/table-level validation evidence.
-- [ ] Mac Mini: run post-migration automated integrity checks and retain minimal manual verification list.
+- [x] Precondition: present proposed migration records and obtain explicit user confirmation before commit/deploy/execution.
+- [x] Codespaces: prepare migration scripts and dry-run validation tooling (no production execution).
+- [x] Mac Mini: execute production migration after explicit confirmation and capture row-level/table-level validation evidence.
+- [x] Mac Mini: run post-migration automated integrity checks and retain minimal manual verification list.
+
+**Migration evidence (2026-03-28, Mac Mini):**
+- Users dry-run: PASS (4 records: Roddy, Ashuah, Raelynn, Kinsleigh — all `FAM#tomlin`)
+- Recipes dry-run: PASS (2 records: Breakfast Burrito `rec_df969f2d`, Grilled Chicken Salad `rec_f206aa64`)
+- Live execute: `thc-meal-planner-prod-users` — 4 PutItem writes succeeded
+- Live execute: `thc-meal-planner-prod-recipes` — 2 PutItem writes succeeded
+- Post-migration `get-item` spot checks: all 6 items confirmed present with correct PK/SK/name/role/familyId
 
 ## Automation-First Validation Plan
 
@@ -192,7 +199,7 @@ Goal: complete validation as much as possible with automated checks before manua
 | 7.6 | Coverage validation | Shared | In Progress | Frontend threshold passes; backend gate now parses Cobertura output with merge-safe minimum 65% and explicit target 80%; current backend line coverage ~67.3%. |
 | 7.7 | Security hardening | Shared | In Progress | API + CloudFront security headers plus CodeQL, secret scan, and Dependabot config landed; dev deployed checks now show required headers present. |
 | 7.8 | Production deployment | Mac Mini | Done | Prod CDK deploy + frontend publish + CloudFront invalidation completed; smoke validation passed for `/`, `/api/health`, `/api/profile` (401 expected), and CORS preflight on `https://d2v72fk62knvt7.cloudfront.net`. |
-| 7.9 | Migration to production | Mac Mini | Not Started | Requires explicit data confirmation before execution. |
+| 7.9 | Migration to production | Mac Mini | Done | 4 profile + 2 recipe records written to prod DynamoDB; get-item spot checks pass for all 6 items. Evidence captured 2026-03-28. |
 
 ## Milestone Criteria Tracking
 
