@@ -13,7 +13,7 @@ Command runbook: [PHASE7_MACMINI_EXECUTION.md](PHASE7_MACMINI_EXECUTION.md)
 
 - Codespaces implementation status: In progress (major automation/security/PWA/E2E/coverage items implemented).
 - Mac Mini deployed validation status: In progress (dev deploy + automated smoke + deployed header checks completed).
-- Remaining blockers to close Phase 7: SES runtime email-send verification, production deploy execution, and production migration execution/verification on Mac Mini lane.
+- Remaining blockers to close Phase 7: SES runtime email-send verification and production migration execution/verification on Mac Mini lane.
 
 ## Check-In Protocol
 
@@ -75,6 +75,15 @@ Check-in template:
 - Automated evidence added: yes (`dotnet test --filter FullyQualifiedName~ChatServiceTests`, `dotnet test --collect:"XPlat Code Coverage"`, Cobertura parse for API-only and root metrics).
 - Blockers or handoff requests: overall backend API line coverage is ~70.1% excluding `/obj/`; changed-file gate enforces >=80% for modified backend API source files in PRs while broader uplift continues.
 
+### 2026-03-28 - Mac Mini lane (production deployment + smoke)
+
+- Lane: Mac Mini
+- Task: 7.8 production deployment execution and validation
+- Status: Done
+- Contracts touched: prod CDK stacks (`ThcMealPlanner-prod-*`), prod frontend bucket sync, CloudFront invalidation, runbook smoke command evidence.
+- Automated evidence added: yes (`npx cdk deploy --all --context env=prod --require-approval never`, `npm run build`, `aws s3 sync dist s3://<prod-bucket> --delete`, `aws cloudfront create-invalidation --paths '/*'`, `bash scripts/validate-deployment.sh https://d2v72fk62knvt7.cloudfront.net prod`, `aws cloudformation describe-stacks ...`).
+- Blockers or handoff requests: 7.9 migration remains blocked until explicit user confirmation per policy.
+
 ## Ordered Delivery Todo Backlog (7.1-7.9)
 
 ### 7.1 Email notifications (SES)
@@ -130,9 +139,9 @@ Check-in template:
 ### 7.8 Production deployment
 
 - [x] Codespaces: finalize production deployment runbook docs, env contracts, and rollback notes.
-- [ ] Mac Mini: execute production CDK deploy, frontend publish, CloudFront invalidation, and post-deploy automated smoke tests.
+- [x] Mac Mini: execute production CDK deploy, frontend publish, CloudFront invalidation, and post-deploy automated smoke tests.
 - [x] Mac Mini: configure budget alarms and production monitoring/alert baselines.
-- [ ] Mac Mini: document production outputs and any changed resource contracts.
+- [x] Mac Mini: document production outputs and any changed resource contracts.
 
 ### 7.9 Migration to production
 
@@ -154,7 +163,7 @@ Goal: complete validation as much as possible with automated checks before manua
 - [x] Lint/build checks pass for frontend, backend, and infra.
 - [x] Security checks pass (headers assertions, dependency scanning, secret scanning, CI policy checks) for configured automation in repo.
 - [x] Deployed dev smoke checks pass (health/auth/CORS/core routes).
-- [ ] Deployed production smoke checks pass after 7.8.
+- [x] Deployed production smoke checks pass after 7.8.
 
 ### B. Suggested automated evidence capture per run
 
@@ -182,7 +191,7 @@ Goal: complete validation as much as possible with automated checks before manua
 | 7.5 | E2E test suite | Codespaces | Done | Playwright setup + smoke suites added and passing locally (`npm run test:e2e:smoke`). |
 | 7.6 | Coverage validation | Shared | In Progress | Frontend threshold passes; backend gate now parses Cobertura output with merge-safe minimum 65% and explicit target 80%; current backend line coverage ~67.3%. |
 | 7.7 | Security hardening | Shared | In Progress | API + CloudFront security headers plus CodeQL, secret scan, and Dependabot config landed; dev deployed checks now show required headers present. |
-| 7.8 | Production deployment | Mac Mini | In Progress | `deploy-prod.yml`, runbook, and automated smoke script added; execution pending Mac Mini. |
+| 7.8 | Production deployment | Mac Mini | Done | Prod CDK deploy + frontend publish + CloudFront invalidation completed; smoke validation passed for `/`, `/api/health`, `/api/profile` (401 expected), and CORS preflight on `https://d2v72fk62knvt7.cloudfront.net`. |
 | 7.9 | Migration to production | Mac Mini | Not Started | Requires explicit data confirmation before execution. |
 
 ## Milestone Criteria Tracking
@@ -192,10 +201,10 @@ Goal: complete validation as much as possible with automated checks before manua
 - [~] All responsive breakpoints polished.
 - [~] 80% code coverage across .NET and React.
 - [x] Playwright E2E suite passes.
-- [ ] Production deployment live and stable.
+- [x] Production deployment live and stable.
 
 ## Latest Coverage Snapshot
 
-- Backend line coverage (collector/Cobertura): ~67.51% (`138` tests passing locally).
+- Backend API line coverage (excluding `/obj/`): ~70.11% (`163` tests passing locally).
 - Frontend line coverage: ~89.35% (`60` tests passing locally).
 - Coverage uplift pass completed for `RecipeImageUploadService` and notification request validators via new backend tests.
