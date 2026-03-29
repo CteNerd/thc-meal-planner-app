@@ -297,11 +297,19 @@ Codespaces kickoff: [PHASE2_CODESPACES_KICKOFF.md](PHASE2_CODESPACES_KICKOFF.md)
 | 7.5 | E2E test suite | Playwright tests for critical paths (login, plan, grocery, chat) |
 | 7.6 | Coverage validation | Ensure 80% across all projects |
 | 7.7 | Security hardening | CSP headers, security response headers, Dependabot, secret scanning |
-| 7.8 | Production deployment | CDK deploy to prod, custom domain setup (optional), budget alarm |
+| 7.8 | Production deployment | CDK deploy to prod, Route 53 + ACM custom domains for prod/dev, budget alarm |
 | 7.9 | Migration to production | Run migration script against prod tables, validate |
 
 Tracking doc: [PHASE7_CHECKLIST.md](PHASE7_CHECKLIST.md)
 Mac Mini execution commands: [PHASE7_MACMINI_EXECUTION.md](PHASE7_MACMINI_EXECUTION.md)
+
+Current implementation status as of 2026-03-28:
+
+- 7.4 Dashboard page: done
+- 7.5 E2E smoke suite: done
+- 7.8 Production deployment: done, including prod/dev custom domains
+- 7.9 Production migration: done with DynamoDB integrity spot checks
+- Remaining open work is Phase 7 closeout validation: SES mailbox verification, manual PWA/offline and responsive checks, household E2E validation, and broader backend coverage uplift toward the 80% target.
 
 ### Milestone Criteria
 - Email notifications send for meal plan completion
@@ -309,7 +317,7 @@ Mac Mini execution commands: [PHASE7_MACMINI_EXECUTION.md](PHASE7_MACMINI_EXECUT
 - All responsive breakpoints polished
 - 80% code coverage across .NET and React
 - Playwright E2E suite passes
-- Production deployment live and stable
+- Production deployment live and stable on custom domains with completed prod data migration
 
 ### Ownership Guidance (Parallel Lanes)
 

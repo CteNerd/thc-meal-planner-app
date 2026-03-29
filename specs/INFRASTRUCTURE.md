@@ -78,7 +78,7 @@ infra/
   - Stage: `{env}` (dev or prod)
   - Deploy with stage variables for environment
   - Throttling: 100 requests/second burst, 50 sustained
-  - CORS: single origin (CloudFront domain)
+  - CORS: single origin per environment (custom domain when configured, otherwise CloudFront domain)
   - Custom domain: optional via Route 53
   - Binary media types: `application/json`
   - Request validation: enabled
@@ -175,7 +175,9 @@ export const devConfig = {
   env: 'dev',
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: 'us-east-1',
-  domainName: undefined, // CloudFront default domain
+  domainName: 'dev-thc-mealplanner.tomlin.life',
+  hostedZoneId: 'Z09770441ES3ZDJB86W5A',
+  hostedZoneName: 'tomlin.life',
   lambda: {
     memory: 512,
     timeout: 30,
@@ -194,7 +196,9 @@ export const prodConfig = {
   env: 'prod',
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: 'us-east-1',
-  domainName: 'meals.example.com', // optional custom domain
+  domainName: 'thc-mealplanner.tomlin.life',
+  hostedZoneId: 'Z09770441ES3ZDJB86W5A',
+  hostedZoneName: 'tomlin.life',
   lambda: {
     memory: 512,
     timeout: 30,
@@ -217,6 +221,11 @@ npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1
 ```
 
 ### Commands
+
+Current deployed frontends:
+
+- Dev: `https://dev-thc-mealplanner.tomlin.life`
+- Prod: `https://thc-mealplanner.tomlin.life`
 
 ```bash
 # Deploy all stacks to dev

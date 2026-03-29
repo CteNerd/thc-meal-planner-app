@@ -150,6 +150,11 @@ Strict single-origin CORS on API Gateway:
 
 No wildcard origins. Updated when custom domain is configured.
 
+Current environment origins:
+
+- Dev: `https://dev-thc-mealplanner.tomlin.life`
+- Prod: `https://thc-mealplanner.tomlin.life`
+
 ---
 
 ## Input Validation

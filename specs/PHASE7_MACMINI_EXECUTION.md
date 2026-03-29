@@ -51,6 +51,7 @@ export DEV_USER_POOL_ID=us-east-1_OWufvWke8
 export DEV_USER_POOL_CLIENT_ID=1a0hgiq7vfdc7id09ogv188alg
 export DEV_BUCKET=thcmealplanner-dev-frontend-frontendbucketefe2e19c-q3gmyu83uoax
 export DEV_DIST_DOMAIN=d3ugym4rb87yys.cloudfront.net
+export DEV_CUSTOM_DOMAIN=dev-thc-mealplanner.tomlin.life
 
 cd frontend
 VITE_COGNITO_REGION=us-east-1 \
@@ -76,6 +77,7 @@ aws cloudfront create-invalidation \
 
 ```bash
 bash scripts/validate-deployment.sh "https://$DEV_DIST_DOMAIN" dev
+bash scripts/validate-deployment.sh "https://$DEV_CUSTOM_DOMAIN" dev
 ```
 
 Optional deployed header/PWA check:
@@ -84,7 +86,7 @@ Optional deployed header/PWA check:
 python3 - <<'PY'
 import urllib.request
 
-base = 'https://d3ugym4rb87yys.cloudfront.net'
+base = 'https://dev-thc-mealplanner.tomlin.life'
 paths = ['/', '/manifest.webmanifest', '/sw.js', '/api/health']
 headers_to_check = [
     'content-security-policy',
@@ -134,8 +136,19 @@ cd ..
 
 # Build and publish frontend with prod outputs, then invalidate prod distribution.
 # Finally run:
-# bash scripts/validate-deployment.sh "https://<prod-distribution-domain>" prod
+# bash scripts/validate-deployment.sh "https://thc-mealplanner.tomlin.life" prod
 ```
+
+Current production domain outputs:
+
+- Prod app: `https://thc-mealplanner.tomlin.life`
+- Dev app: `https://dev-thc-mealplanner.tomlin.life`
+
+Custom-domain rollout notes:
+
+- Route 53 hosted zone: `tomlin.life`
+- ACM certificates are provisioned in `us-east-1` for both frontend distributions.
+- Cognito user-pool clients allow callback/logout URLs for the matching custom domain; dev also allows `http://localhost:5173` and `http://127.0.0.1:5173`.
 
 ## 7) Migration to Production (7.9)
 
@@ -145,8 +158,47 @@ After confirmation:
 
 ```bash
 # Dry run / validation first (no writes)
-# Run migration command with prod targets
-# Run post-migration integrity checks
+dotnet run --project backend/ThcMealPlanner.Migration -- \
+  --entity users --region us-east-1 \
+  --users-file .local/seed-data/Users.json \
+  --users-table-name thc-meal-planner-prod-users \
+  --dry-run
+
+dotnet run --project backend/ThcMealPlanner.Migration -- \
+  --entity recipes --region us-east-1 \
+  --recipes-file .local/seed-data/Recipes.json \
+  --recipes-table-name thc-meal-planner-prod-recipes \
+  --expected-recipes 2 \
+  --dry-run
+
+# Execute after explicit confirmation
+dotnet run --project backend/ThcMealPlanner.Migration -- \
+  --entity users --region us-east-1 \
+  --users-file .local/seed-data/Users.json \
+  --users-table-name thc-meal-planner-prod-users \
+  --execute
+
+dotnet run --project backend/ThcMealPlanner.Migration -- \
+  --entity recipes --region us-east-1 \
+  --recipes-file .local/seed-data/Recipes.json \
+  --recipes-table-name thc-meal-planner-prod-recipes \
+  --expected-recipes 2 \
+  --execute
+
+# Post-migration spot checks
+aws dynamodb get-item --profile thc --region us-east-1 \
+  --table-name thc-meal-planner-prod-users \
+  --key '{"PK":{"S":"USER#e4a87458-1071-70a0-e6dc-1fb30f7d4eaf"},"SK":{"S":"PROFILE"}}'
+
+aws dynamodb get-item --profile thc --region us-east-1 \
+  --table-name thc-meal-planner-prod-recipes \
+  --key '{"PK":{"S":"FAMILY#FAM#tomlin"},"SK":{"S":"RECIPE#rec_df969f2d"}}'
 ```
+
+Completed 2026-03-28:
+
+- Users migration executed successfully: 4 records written
+- Recipes migration executed successfully: 2 records written
+- Spot checks passed for all 6 written items
 
 Record all outcomes in [PHASE7_CHECKLIST.md](PHASE7_CHECKLIST.md).

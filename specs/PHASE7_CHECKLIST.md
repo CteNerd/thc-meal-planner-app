@@ -12,8 +12,8 @@ Command runbook: [PHASE7_MACMINI_EXECUTION.md](PHASE7_MACMINI_EXECUTION.md)
 ## Phase Status Summary
 
 - Codespaces implementation status: In progress (major automation/security/PWA/E2E/coverage items implemented).
-- Mac Mini deployed validation status: In progress (dev deploy + automated smoke + deployed header checks completed).
-- Remaining blockers to close Phase 7: SES runtime email-send verification and production migration execution/verification on Mac Mini lane.
+- Mac Mini deployed validation status: In progress (dev/prod deploys, custom domains, prod migration, and automated smoke/integrity checks completed).
+- Remaining blockers to close Phase 7: SES runtime email-send verification plus remaining manual validation items (PWA install/offline, responsive checks, household E2E).
 
 ## Check-In Protocol
 
@@ -83,6 +83,15 @@ Check-in template:
 - Contracts touched: prod CDK stacks (`ThcMealPlanner-prod-*`), prod frontend bucket sync, CloudFront invalidation, runbook smoke command evidence.
 - Automated evidence added: yes (`npx cdk deploy --all --context env=prod --require-approval never`, `npm run build`, `aws s3 sync dist s3://<prod-bucket> --delete`, `aws cloudfront create-invalidation --paths '/*'`, `bash scripts/validate-deployment.sh https://d2v72fk62knvt7.cloudfront.net prod`, `aws cloudformation describe-stacks ...`).
 - Blockers or handoff requests: 7.9 migration remains blocked until explicit user confirmation per policy.
+
+### 2026-03-28 - Mac Mini lane (production migration + custom domains)
+
+- Lane: Mac Mini
+- Task: 7.8, 7.9, auth/domain contract follow-up
+- Status: Done
+- Contracts touched: prod and dev frontend custom domains (`thc-mealplanner.tomlin.life`, `dev-thc-mealplanner.tomlin.life`), Route 53 hosted zone `tomlin.life`, ACM certificates in `us-east-1`, CloudFront alternate domain names, Cognito user-pool client callback/logout URLs for prod/dev, prod DynamoDB seed state.
+- Automated evidence added: yes (`dotnet run --project backend/ThcMealPlanner.Migration -- --entity users ... --execute`, `dotnet run --project backend/ThcMealPlanner.Migration -- --entity recipes ... --execute`, `aws dynamodb get-item ...`, `npx cdk deploy ThcMealPlanner-prod-Frontend --context env=prod`, `npx cdk deploy ThcMealPlanner-dev-Frontend --context env=dev`, Python smoke checks against both custom domains, `aws cognito-idp describe-user-pool-client ...`).
+- Blockers or handoff requests: No deployment blockers remain; only manual Phase 7 validation tasks and SES end-to-end mailbox verification are still open.
 
 ## Ordered Delivery Todo Backlog (7.1-7.9)
 
@@ -196,9 +205,9 @@ Goal: complete validation as much as possible with automated checks before manua
 | 7.3 | Responsive polish | Codespaces | In Progress | Playwright includes desktop + mobile smoke coverage; full manual breakpoint polish still pending. |
 | 7.4 | Dashboard page | Codespaces | Done | Dashboard now loads live summary data (meal plan, grocery, recipes, chat) with quick actions and tests. |
 | 7.5 | E2E test suite | Codespaces | Done | Playwright setup + smoke suites added and passing locally (`npm run test:e2e:smoke`). |
-| 7.6 | Coverage validation | Shared | In Progress | Frontend threshold passes; backend gate now parses Cobertura output with merge-safe minimum 65% and explicit target 80%; current backend line coverage ~67.3%. |
-| 7.7 | Security hardening | Shared | In Progress | API + CloudFront security headers plus CodeQL, secret scan, and Dependabot config landed; dev deployed checks now show required headers present. |
-| 7.8 | Production deployment | Mac Mini | Done | Prod CDK deploy + frontend publish + CloudFront invalidation completed; smoke validation passed for `/`, `/api/health`, `/api/profile` (401 expected), and CORS preflight on `https://d2v72fk62knvt7.cloudfront.net`. |
+| 7.6 | Coverage validation | Shared | In Progress | Frontend threshold passes; backend CI now enforces 70% API-only minimum coverage excluding `/obj/`, reports 80% as the target, and gates changed backend API files at >=80%; current backend API line coverage is ~70.11%. |
+| 7.7 | Security hardening | Shared | In Progress | API + CloudFront security headers plus CodeQL, secret scan, and Dependabot config landed; deployed checks now show required headers present on current domains. |
+| 7.8 | Production deployment | Mac Mini | Done | Prod CDK deploy + frontend publish + CloudFront invalidation completed; custom domains now live at `https://thc-mealplanner.tomlin.life` (prod) and `https://dev-thc-mealplanner.tomlin.life` (dev); smoke validation passed for `/`, `/api/health`, and `/api/profile` (401 expected). |
 | 7.9 | Migration to production | Mac Mini | Done | 4 profile + 2 recipe records written to prod DynamoDB; get-item spot checks pass for all 6 items. Evidence captured 2026-03-28. |
 
 ## Milestone Criteria Tracking
@@ -214,4 +223,4 @@ Goal: complete validation as much as possible with automated checks before manua
 
 - Backend API line coverage (excluding `/obj/`): ~70.11% (`163` tests passing locally).
 - Frontend line coverage: ~89.35% (`60` tests passing locally).
-- Coverage uplift pass completed for `RecipeImageUploadService` and notification request validators via new backend tests.
+- Coverage uplift pass completed for chat, notification, AI-key, and meal-plan service paths via new backend tests; CI floor raised to 70% API-only coverage with >=80% gate on changed backend API files.

@@ -20,9 +20,15 @@ Standardized deployment and rollback procedure for Phase 7 closeout.
 Use [validate-deployment.sh](../scripts/validate-deployment.sh):
 
 ```bash
-./scripts/validate-deployment.sh https://<cloudfront-domain> dev
-./scripts/validate-deployment.sh https://<cloudfront-domain> prod
+./scripts/validate-deployment.sh https://dev-thc-mealplanner.tomlin.life dev
+./scripts/validate-deployment.sh https://thc-mealplanner.tomlin.life prod
 ```
+
+Current active domains:
+
+- Dev: `https://dev-thc-mealplanner.tomlin.life`
+- Prod: `https://thc-mealplanner.tomlin.life`
+- CloudFront fallback domains remain valid for infrastructure troubleshooting and direct smoke checks.
 
 Checks:
 
@@ -43,6 +49,7 @@ Checks:
 Capture these after each run:
 
 - Stack outputs (distribution domain, bucket, API URL, auth IDs).
+- Custom domain outputs and any Route 53 / ACM changes.
 - Workflow run URL and commit SHA.
 - Smoke validation output.
 - Any contract changes (env vars, routes, table/index names).
