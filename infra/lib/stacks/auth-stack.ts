@@ -11,6 +11,10 @@ export class AuthStack extends Stack {
     super(scope, id, props);
 
     const prefix = `thc-meal-planner-${props.deploymentConfig.name}`;
+    const appUrl = props.deploymentConfig.domainName
+      ? `https://${props.deploymentConfig.domainName}`
+      : 'https://thc-mealplanner.tomlin.life';
+
     const allowedOrigins = props.deploymentConfig.domainName
       ? [`https://${props.deploymentConfig.domainName}`]
       : [];
@@ -24,22 +28,30 @@ export class AuthStack extends Stack {
       signInAliases: { email: true },
       selfSignUpEnabled: false,
       userInvitation: {
-        emailSubject: 'THC Meal Planner: Finish Setting Up Your Account',
+        emailSubject: 'THC Meal Planner \u2014 Your Account Is Ready',
         emailBody: [
           'Hi there,',
           '',
-          'Your THC Meal Planner account is ready.',
+          'Your THC Meal Planner account has been created.',
+          'THC Meal Planner helps your household plan meals, manage grocery lists, and build a shared cookbook.',
           '',
-          'Temporary sign-in details:',
-          'Username: {username}',
+          '--- Sign-In Details ---',
+          'App:               ' + appUrl,
+          'Username:          {username}',
           'Temporary password: {####}',
           '',
-          'Next steps:',
-          '1) Sign in with the temporary password',
-          '2) Create a new password',
-          '3) Complete TOTP authenticator setup',
+          '--- First-Time Setup Steps ---',
+          '1. Open the app at ' + appUrl,
+          '2. Sign in with the username and temporary password above.',
+          '3. You will be prompted to set a permanent password.',
+          '4. Next, you will set up two-factor authentication (TOTP).',
+          '   Download Google Authenticator or Authy on your phone,',
+          '   then scan the QR code shown on screen.',
+          '5. Enter the 6-digit code from your authenticator to finish.',
           '',
-          'If you were not expecting this email, please reply to the household admin.',
+          'After setup you can log in normally using your email and authenticator code.',
+          '',
+          'Questions? Reply to this email or ask the household admin.',
           '',
           'THC Meal Planner'
         ].join('\n')

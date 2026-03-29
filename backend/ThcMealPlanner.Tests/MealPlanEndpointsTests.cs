@@ -572,5 +572,13 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
             IReadOnlyList<RecipeDocument> candidates,
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<AiRecipeIdea>> SuggestFreshIdeasAsync(
+            string day,
+            string mealType,
+            string? profileContext,
+            int count,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<AiRecipeIdea>>([]);
     }
 }

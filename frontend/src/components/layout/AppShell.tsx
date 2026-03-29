@@ -9,7 +9,8 @@ const pageHelpByPath: Record<string, { title: string; description: string }> = {
   },
   '/meal-plans': {
     title: 'Meal Planning Workflow',
-    description: 'Generate the week, review each slot, and use Suggest/Swap controls to tune meals. Changes sync grocery data.'
+    description:
+      'Click "Generate" to build the week from your cookbook. For any slot, click "Suggest" — the AI ranks your existing recipes for that slot AND proposes brand-new meal ideas based on your family profiles (allergies, preferred foods, dietary style). New ideas appear below the swap dropdown with an "Add to cookbook" link. Use the swap dropdown to instantly update a slot with any cookbook recipe.'
   },
   '/cookbook': {
     title: 'Cookbook Management',

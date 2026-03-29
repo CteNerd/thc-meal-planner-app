@@ -1,10 +1,26 @@
 import { Card } from '../components/ui/Card';
 import { useEffect, useState } from 'react';
 import type { DependentProfile, UserProfile } from '../types';
-import { createDependent, deleteDependent, getProfile, listDependents, updateProfile } from '../services/profileApi';
+import { createDependent, deleteDependent, getProfile, listDependents, updateDependent, updateProfile } from '../services/profileApi';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { getApiErrorMessage } from '../services/api';
+
+type DependentEditDraft = {
+  name: string;
+  ageGroup: string;
+  eatingStyle: string;
+  dietaryPrefs: string;
+  allergens: string;
+  preferredFoods: string;
+  avoidedFoods: string;
+  notes: string;
+};
+
+const EMPTY_DRAFT: DependentEditDraft = {
+  name: '', ageGroup: '', eatingStyle: '', dietaryPrefs: '',
+  allergens: '', preferredFoods: '', avoidedFoods: '', notes: ''
+};
 
 export function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -15,6 +31,8 @@ export function ProfilePage() {
   const [nameDraft, setNameDraft] = useState('');
   const [newDependentName, setNewDependentName] = useState('');
   const [newDependentAgeGroup, setNewDependentAgeGroup] = useState('');
+  const [editingDependentId, setEditingDependentId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<DependentEditDraft>(EMPTY_DRAFT);
 
   useEffect(() => {
     let active = true;
@@ -107,6 +125,50 @@ export function ProfilePage() {
     }
   }
 
+  function handleBeginEditDependent(dep: DependentProfile) {
+    setEditingDependentId(dep.userId);
+    setEditDraft({
+      name: dep.name,
+      ageGroup: dep.ageGroup ?? '',
+      eatingStyle: dep.eatingStyle ?? '',
+      dietaryPrefs: (dep.dietaryPrefs ?? []).join(', '),
+      allergens: (dep.allergies ?? []).map((a) => a.allergen).join(', '),
+      preferredFoods: (dep.preferredFoods ?? []).join(', '),
+      avoidedFoods: (dep.avoidedFoods ?? []).join(', '),
+      notes: dep.notes ?? ''
+    });
+  }
+
+  function handleCancelEditDependent() {
+    setEditingDependentId(null);
+    setEditDraft(EMPTY_DRAFT);
+  }
+
+  async function handleSaveEditDependent(userId: string) {
+    const splitList = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean);
+    try {
+      setIsSaving(true);
+      setError(null);
+      const updated = await updateDependent(userId, {
+        name: editDraft.name.trim() || undefined,
+        ageGroup: editDraft.ageGroup.trim() || undefined,
+        eatingStyle: editDraft.eatingStyle.trim() || undefined,
+        dietaryPrefs: splitList(editDraft.dietaryPrefs),
+        allergies: splitList(editDraft.allergens).map((a) => ({ allergen: a, severity: 'unknown' })),
+        preferredFoods: splitList(editDraft.preferredFoods),
+        avoidedFoods: splitList(editDraft.avoidedFoods),
+        notes: editDraft.notes.trim() || undefined
+      });
+      setDependents((current) => current.map((d) => d.userId === userId ? updated : d));
+      setEditingDependentId(null);
+      setEditDraft(EMPTY_DRAFT);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to save dependent changes.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <Card>
       <h2 className="text-2xl font-semibold text-slate-900">Profile</h2>
@@ -149,16 +211,74 @@ export function ProfilePage() {
             {dependents.length === 0 ? (
               <p className="text-sm text-slate-600">No dependent profiles yet.</p>
             ) : (
-              <ul className="space-y-2">
-                {dependents.map((dependent) => (
-                  <li key={dependent.userId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <div className="text-sm text-slate-700">
-                      <p className="font-medium">{dependent.name}</p>
-                      <p className="text-xs text-slate-500">{dependent.ageGroup ?? 'No age group specified'}</p>
-                    </div>
-                    <Button variant="ghost" onClick={() => void handleDeleteDependent(dependent.userId)} disabled={isSaving}>Remove</Button>
-                  </li>
-                ))}
+              <ul className="space-y-3">
+                {dependents.map((dependent) =>
+                  editingDependentId === dependent.userId ? (
+                    <li key={dependent.userId} className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                      <p className="text-sm font-semibold text-sky-800">Editing {dependent.name}</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Name <span className="text-red-500">*</span></label>
+                          <Input value={editDraft.name} onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))} aria-label="Name" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Age group</label>
+                          <Input value={editDraft.ageGroup} onChange={(e) => setEditDraft((d) => ({ ...d, ageGroup: e.target.value }))} placeholder="e.g. 8-12" aria-label="Age group" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Eating style</label>
+                          <Input value={editDraft.eatingStyle} onChange={(e) => setEditDraft((d) => ({ ...d, eatingStyle: e.target.value }))} placeholder="e.g. picky, adventurous" aria-label="Eating style" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Dietary prefs <span className="text-slate-400">(comma-separated)</span></label>
+                          <Input value={editDraft.dietaryPrefs} onChange={(e) => setEditDraft((d) => ({ ...d, dietaryPrefs: e.target.value }))} placeholder="e.g. vegetarian, gluten-free" aria-label="Dietary prefs" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Allergies <span className="text-slate-400">(allergen names, comma-separated)</span></label>
+                          <Input value={editDraft.allergens} onChange={(e) => setEditDraft((d) => ({ ...d, allergens: e.target.value }))} placeholder="e.g. peanuts, dairy" aria-label="Allergies" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Preferred foods <span className="text-slate-400">(comma-separated)</span></label>
+                          <Input value={editDraft.preferredFoods} onChange={(e) => setEditDraft((d) => ({ ...d, preferredFoods: e.target.value }))} placeholder="e.g. chicken, rice" aria-label="Preferred foods" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-slate-600">Avoided foods <span className="text-slate-400">(comma-separated)</span></label>
+                          <Input value={editDraft.avoidedFoods} onChange={(e) => setEditDraft((d) => ({ ...d, avoidedFoods: e.target.value }))} placeholder="e.g. mushrooms, onions" aria-label="Avoided foods" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-xs font-medium text-slate-600">Notes</label>
+                          <Input value={editDraft.notes} onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Any other relevant notes" aria-label="Notes" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={() => void handleSaveEditDependent(dependent.userId)} disabled={isSaving || !editDraft.name.trim()}>Save</Button>
+                        <Button variant="ghost" onClick={handleCancelEditDependent} disabled={isSaving}>Cancel</Button>
+                      </div>
+                    </li>
+                  ) : (
+                    <li key={dependent.userId} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm text-slate-700 space-y-0.5">
+                          <p className="font-medium">{dependent.name}</p>
+                          <p className="text-xs text-slate-500">{dependent.ageGroup ?? 'No age group'}{dependent.eatingStyle ? ` · ${dependent.eatingStyle}` : ''}</p>
+                          {dependent.allergies.length > 0 && (
+                            <p className="text-xs text-red-600">Allergies: {dependent.allergies.map((a) => a.allergen).join(', ')}</p>
+                          )}
+                          {dependent.avoidedFoods.length > 0 && (
+                            <p className="text-xs text-amber-700">Avoids: {dependent.avoidedFoods.join(', ')}</p>
+                          )}
+                          {dependent.preferredFoods.length > 0 && (
+                            <p className="text-xs text-green-700">Prefers: {dependent.preferredFoods.join(', ')}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button variant="ghost" onClick={() => handleBeginEditDependent(dependent)} disabled={isSaving}>Edit</Button>
+                          <Button variant="ghost" onClick={() => void handleDeleteDependent(dependent.userId)} disabled={isSaving}>Remove</Button>
+                        </div>
+                      </div>
+                    </li>
+                  )
+                )}
               </ul>
             )}
           </section>

@@ -131,6 +131,14 @@ public interface IMealPlanAiService
         string? currentRecipeId,
         IReadOnlyList<RecipeDocument> candidates,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Ask the AI to suggest fresh meal ideas not currently in the cookbook, guided by family profile constraints.</summary>
+    Task<IReadOnlyList<AiRecipeIdea>> SuggestFreshIdeasAsync(
+        string day,
+        string mealType,
+        string? profileContext,
+        int count,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class MealPlanAiService : IMealPlanAiService
@@ -285,6 +293,76 @@ public sealed class MealPlanAiService : IMealPlanAiService
             "Available recipes:",
             recipesJson
         ]);
+    }
+
+    public async Task<IReadOnlyList<AiRecipeIdea>> SuggestFreshIdeasAsync(
+        string day,
+        string mealType,
+        string? profileContext,
+        int count,
+        CancellationToken cancellationToken = default)
+    {
+        var safeCount = Math.Clamp(count, 1, 5);
+        var prompt = BuildFreshIdeasPrompt(day, mealType, profileContext, safeCount);
+        var content = await ExecutePromptAsync(prompt, cancellationToken);
+        return ParseIdeasArray(content);
+    }
+
+    private static string BuildFreshIdeasPrompt(string day, string mealType, string? profileContext, int count)
+    {
+        var contextLine = string.IsNullOrWhiteSpace(profileContext)
+            ? string.Empty
+            : $"Family context: {profileContext}";
+
+        return string.Join('\n',
+        [
+            $"Suggest {count} fresh {mealType} meal ideas for {day} that are NOT in the family cookbook.",
+            "Return strict JSON in this shape only:",
+            "{\"ideas\": [{\"name\": \"Meal name\", \"reason\": \"Why it fits\", \"category\": \"breakfast|lunch|dinner\"}]}",
+            string.Empty,
+            "Rules:",
+            $"- All ideas must be {mealType} appropriate.",
+            "- Reason must be one sentence explaining why it suits the family.",
+            "- Respect any allergies or avoided ingredients in the family context.",
+            "- Suggest practical home-cooked meals, not restaurant dishes.",
+            string.Empty,
+            contextLine
+        ]);
+    }
+
+    private static IReadOnlyList<AiRecipeIdea> ParseIdeasArray(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(content);
+            if (!doc.RootElement.TryGetProperty("ideas", out var ideas) || ideas.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var result = new List<AiRecipeIdea>();
+            foreach (var el in ideas.EnumerateArray())
+            {
+                var name = el.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+                var reason = el.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+                var category = el.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    result.Add(new AiRecipeIdea(name, reason ?? string.Empty, category ?? string.Empty));
+                }
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static string BuildSwapRankingPrompt(

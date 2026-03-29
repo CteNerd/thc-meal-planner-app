@@ -261,6 +261,8 @@ export type MealSwapSuggestion = {
   constraintSafe: boolean;
   score: number;
   notes: string[];
+  isAiSuggestion?: boolean;
+  aiReason?: string;
 };
 
 export type MealAssociation = {

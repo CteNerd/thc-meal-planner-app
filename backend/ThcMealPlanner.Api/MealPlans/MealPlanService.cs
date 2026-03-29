@@ -21,6 +21,7 @@ public interface IMealPlanService
         string day,
         string mealType,
         int limit = 5,
+        string? profileContext = null,
         CancellationToken cancellationToken = default);
 
     Task<MealPlanDocument?> UpdateAsync(string familyId, string weekStartDate, UpdateMealPlanRequest request, CancellationToken cancellationToken = default);
@@ -225,6 +226,7 @@ public sealed class MealPlanService : IMealPlanService
         string day,
         string mealType,
         int limit = 5,
+        string? profileContext = null,
         CancellationToken cancellationToken = default)
     {
         var normalizedLimit = Math.Clamp(limit, 1, 10);
@@ -285,7 +287,8 @@ public sealed class MealPlanService : IMealPlanService
 
         if (rankedIds.Count == 0)
         {
-            return suggestions;
+            var ideasOnly = await _mealPlanAiService.SuggestFreshIdeasAsync(day, mealType, profileContext, 3, cancellationToken);
+            return [..suggestions, ..BuildAiSuggestions(ideasOnly)];
         }
 
         var rankedOrder = rankedIds
@@ -298,8 +301,20 @@ public sealed class MealPlanService : IMealPlanService
             .ThenByDescending(s => s.Score)
             .ToList();
 
-        return suggestions;
+        var freshIdeas = await _mealPlanAiService.SuggestFreshIdeasAsync(day, mealType, profileContext, 3, cancellationToken);
+        return [..suggestions, ..BuildAiSuggestions(freshIdeas)];
     }
+
+    private static IEnumerable<MealSwapSuggestion> BuildAiSuggestions(IReadOnlyList<AiRecipeIdea> ideas)
+        => ideas.Select(idea => new MealSwapSuggestion
+        {
+            RecipeId = string.Empty,
+            RecipeName = idea.Name,
+            ConstraintSafe = true,
+            Score = 0,
+            IsAiSuggestion = true,
+            AiReason = idea.Reason
+        });
 
     private static RecipeDocument? TryTakeAiRecipe(
         List<string> aiRecipeQueue,

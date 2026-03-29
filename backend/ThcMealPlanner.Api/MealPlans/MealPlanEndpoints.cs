@@ -1,6 +1,8 @@
 using FluentValidation;
 using ThcMealPlanner.Api.Authentication;
 using ThcMealPlanner.Api.GroceryLists;
+using ThcMealPlanner.Api.Profiles;
+using ThcMealPlanner.Core.Data;
 
 namespace ThcMealPlanner.Api.MealPlans;
 
@@ -62,6 +64,8 @@ public static class MealPlanEndpoints
         string? mealType,
         int? limit,
         IMealPlanService mealPlanService,
+        IDependentProfileService dependentProfileService,
+        IDynamoDbRepository<UserProfileDocument> profileRepository,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -79,15 +83,67 @@ public static class MealPlanEndpoints
             }.Where(kvp => kvp.Value.Length > 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
         }
 
+        var profileContext = await BuildFamilyProfileContextAsync(
+            userContext.Sub, userContext.FamilyId, profileRepository, dependentProfileService, cancellationToken);
+
         var suggestions = await mealPlanService.SuggestSwapOptionsAsync(
             userContext.FamilyId,
             weekStartDate,
             day,
             mealType,
             limit ?? 5,
+            profileContext,
             cancellationToken);
 
         return Results.Ok(suggestions);
+    }
+
+    private static async Task<string?> BuildFamilyProfileContextAsync(
+        string userId,
+        string familyId,
+        IDynamoDbRepository<UserProfileDocument> profileRepository,
+        IDependentProfileService dependentProfileService,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var profileTask = profileRepository.GetAsync(new DynamoDbKey($"USER#{userId}", "PROFILE"), cancellationToken);
+            var dependentsTask = dependentProfileService.ListByFamilyAsync(familyId, cancellationToken);
+            await Task.WhenAll(profileTask, dependentsTask);
+
+            var profile = await profileTask;
+            var dependents = await dependentsTask;
+            var parts = new List<string>();
+
+            if (profile is not null)
+            {
+                if (profile.DietaryPrefs.Count > 0)
+                    parts.Add($"Adult dietary prefs: {string.Join(", ", profile.DietaryPrefs)}");
+                if (profile.Allergies.Count > 0)
+                    parts.Add($"Adult allergies: {string.Join(", ", profile.Allergies.Select(a => a.Allergen))}");
+                if (profile.ExcludedIngredients.Count > 0)
+                    parts.Add($"Excluded ingredients: {string.Join(", ", profile.ExcludedIngredients)}");
+            }
+
+            foreach (var dep in dependents)
+            {
+                var depParts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(dep.AgeGroup)) depParts.Add($"age {dep.AgeGroup}");
+                if (dep.Allergies.Count > 0) depParts.Add($"allergies: {string.Join(", ", dep.Allergies.Select(a => a.Allergen))}");
+                if (dep.AvoidedFoods.Count > 0) depParts.Add($"avoids: {string.Join(", ", dep.AvoidedFoods)}");
+                if (dep.PreferredFoods.Count > 0) depParts.Add($"prefers: {string.Join(", ", dep.PreferredFoods)}");
+                if (!string.IsNullOrWhiteSpace(dep.EatingStyle)) depParts.Add(dep.EatingStyle);
+                if (depParts.Count > 0)
+                    parts.Add($"{dep.Name} ({string.Join("; ", depParts)})");
+            }
+
+            return parts.Count > 0 ? string.Join(". ", parts) : null;
+        }
+        catch
+        {
+            // Profile context is best-effort; do not fail the suggestions call.
+            return null;
+        }
     }
 
     private static async Task<IResult> GetMealPlanByWeekAsync(

@@ -264,17 +264,17 @@ export function MealPlansPage() {
                             {DAYS.map((day) => {
                               const slot = slotMap.get(toSlotKey(day, mealType));
                               const candidates = recipesByMealType[mealType as keyof typeof recipesByMealType];
-                              const suggestions = suggestionsBySlot[toSlotKey(day, mealType)] ?? [];
-                              const optionPool = suggestions.length > 0
-                                ? suggestions.map((suggestion) => ({
-                                    recipeId: suggestion.recipeId,
-                                    name: suggestion.recipeName,
-                                    constraintSafe: suggestion.constraintSafe
-                                  }))
+                              const allSuggestions = suggestionsBySlot[toSlotKey(day, mealType)] ?? [];
+                              const cookbookSuggestions = allSuggestions.filter((s) => !s.isAiSuggestion);
+                              const aiIdeas = allSuggestions.filter((s) => s.isAiSuggestion);
+                              const optionPool = cookbookSuggestions.length > 0
+                                ? cookbookSuggestions
                                 : candidates.map((candidate) => ({
                                     recipeId: candidate.recipeId,
-                                    name: candidate.name,
-                                    constraintSafe: true
+                                    recipeName: candidate.name,
+                                    constraintSafe: true,
+                                    score: 0,
+                                    notes: [] as string[]
                                   }));
 
                               return (
@@ -311,10 +311,31 @@ export function MealPlansPage() {
                                       </option>
                                       {optionPool.map((recipe) => (
                                         <option key={recipe.recipeId} value={recipe.recipeId}>
-                                          {recipe.name}{recipe.constraintSafe ? '' : ' (constraint warning)'}
+                                          {recipe.recipeName}{recipe.constraintSafe ? '' : ' (constraint warning)'}
                                         </option>
                                       ))}
                                     </select>
+                                    {aiIdeas.length > 0 && (
+                                      <details className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs">
+                                        <summary className="cursor-pointer font-semibold text-violet-700">
+                                          ✨ {aiIdeas.length} new idea{aiIdeas.length !== 1 ? 's' : ''} from AI
+                                        </summary>
+                                        <ul className="mt-2 space-y-2">
+                                          {aiIdeas.map((idea, index) => (
+                                            <li key={index} className="space-y-1">
+                                              <p className="font-medium text-slate-800">{idea.recipeName}</p>
+                                              {idea.aiReason && <p className="text-slate-600">{idea.aiReason}</p>}
+                                              <a
+                                                href={`/cookbook/new?name=${encodeURIComponent(idea.recipeName)}`}
+                                                className="inline-block rounded-lg bg-violet-100 px-2 py-1 text-violet-700 hover:bg-violet-200"
+                                              >
+                                                + Add to cookbook
+                                              </a>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </details>
+                                    )}
                                   </div>
                                 </td>
                               );
