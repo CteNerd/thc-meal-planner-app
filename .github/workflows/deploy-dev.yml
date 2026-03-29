@@ -114,6 +114,7 @@ jobs:
           VITE_COGNITO_REGION: ${{ env.AWS_REGION }}
           VITE_COGNITO_USER_POOL_ID: ${{ steps.outputs.outputs.user_pool_id }}
           VITE_COGNITO_CLIENT_ID: ${{ steps.outputs.outputs.user_pool_client_id }}
+          VITE_PUBLIC_APP_URL: https://dev-thc-mealplanner.tomlin.life
         run: npm run build
 
       - name: Publish frontend assets
