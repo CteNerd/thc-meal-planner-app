@@ -360,7 +360,67 @@ public sealed class ChatService : IChatService
             return openAiReply.Trim();
         }
 
+        if (LooksLikeGenerateMealPlanIntent(userMessage))
+        {
+            var weekStartDate = ResolveWeekStartDateForIntent(userMessage);
+            var deterministicResult = await ExecuteGenerateMealPlanAsync(
+                $"{{\"weekStartDate\":\"{weekStartDate:yyyy-MM-dd}\"}}",
+                familyId,
+                userId,
+                userName,
+                cancellationToken);
+
+            toolActions.Add(deterministicResult.Action);
+            return deterministicResult.UserFacingMessage;
+        }
+
         return "I can help with that. Try asking for a weekly meal plan, grocery list updates, recipe ideas, or pantry management.";
+    }
+
+    private static bool LooksLikeGenerateMealPlanIntent(string userMessage)
+    {
+        var normalized = userMessage.ToLowerInvariant();
+        return (normalized.Contains("meal plan", StringComparison.Ordinal)
+                || normalized.Contains("mealplan", StringComparison.Ordinal))
+            && (normalized.Contains("generate", StringComparison.Ordinal)
+                || normalized.Contains("create", StringComparison.Ordinal)
+                || normalized.Contains("make", StringComparison.Ordinal)
+                || normalized.Contains("plan", StringComparison.Ordinal));
+    }
+
+    private static DateOnly ResolveWeekStartDateForIntent(string userMessage)
+    {
+        var mondayFromMessage = TryExtractMondayDate(userMessage);
+        if (mondayFromMessage is not null)
+        {
+            return mondayFromMessage.Value;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return today.DayOfWeek switch
+        {
+            DayOfWeek.Monday => today,
+            DayOfWeek.Sunday => today.AddDays(1),
+            _ => today.AddDays(1 - (int)today.DayOfWeek)
+        };
+    }
+
+    private static DateOnly? TryExtractMondayDate(string message)
+    {
+        foreach (var token in message.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!DateOnly.TryParse(token, out var candidate))
+            {
+                continue;
+            }
+
+            if (candidate.DayOfWeek == DayOfWeek.Monday)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private async Task<string?> TryGetOpenAiReplyAsync(

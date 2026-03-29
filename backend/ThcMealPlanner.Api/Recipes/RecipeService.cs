@@ -44,10 +44,8 @@ public sealed class RecipeService : IRecipeService
 
     public async Task<IReadOnlyList<RecipeDocument>> ListByFamilyAsync(string familyId, CancellationToken cancellationToken = default)
     {
-        var recipes = await _recipeRepository.QueryByIndexPartitionKeyAsync(
-            indexName: "FamilyIndex",
-            partitionKeyName: "familyId",
-            partitionKeyValue: familyId,
+        var recipes = await _recipeRepository.QueryByPartitionKeyAsync(
+            $"FAMILY#{familyId}",
             cancellationToken: cancellationToken);
 
         return recipes
