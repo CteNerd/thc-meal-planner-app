@@ -88,7 +88,10 @@ export class AuthStack extends Stack {
             { Name: 'role',     AttributeDataType: 'String', Mutable: true, Required: false }
           ]
         },
-        physicalResourceId: PhysicalResourceId.of(`${prefix}-custom-attrs-v1`)
+        physicalResourceId: PhysicalResourceId.of(`${prefix}-custom-attrs-v1`),
+        // Cognito throws InvalidParameterException when the attributes already
+        // exist. Treat that as a no-op so re-deploys are safe on existing pools.
+        ignoreErrorCodesMatching: 'InvalidParameterException'
       },
       policy: AwsCustomResourcePolicy.fromSdkCalls({ resources: [userPool.userPoolArn] })
     });
