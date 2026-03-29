@@ -109,6 +109,7 @@ Check-in template:
 - [x] Codespaces: add install prompt flow and offline fallback UX for safe read-only experiences.
 - [x] Codespaces: add automated checks for manifest/service-worker registration behavior in build/test pipeline.
 - [x] Mac Mini: validate PWA headers and cache behavior in deployed dev environment.
+- [ ] Backlog: replace current single-size `favicon.ico` with a multi-resolution ICO (16/32/48) for best legacy browser/device compatibility.
 
 ### 7.3 Responsive polish
 
