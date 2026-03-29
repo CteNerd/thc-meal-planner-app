@@ -13,7 +13,7 @@ Command runbook: [PHASE7_MACMINI_EXECUTION.md](PHASE7_MACMINI_EXECUTION.md)
 
 - Codespaces implementation status: In progress (major automation/security/PWA/E2E/coverage items implemented).
 - Mac Mini deployed validation status: In progress (dev deploy + automated smoke + deployed header checks completed).
-- Remaining blockers to close Phase 7: SES runtime email-send verification, production deploy execution, budget alarm setup, and production migration execution/verification on Mac Mini lane.
+- Remaining blockers to close Phase 7: SES runtime email-send verification, production deploy execution, and production migration execution/verification on Mac Mini lane.
 
 ## Check-In Protocol
 
@@ -55,7 +55,7 @@ Check-in template:
 - Status: In Progress
 - Contracts touched: `Notifications:FromEmail` dev config, deploy workflow smoke validation hook (`deploy-dev.yml`), CI backend coverage enforcement behavior (`ci.yml`).
 - Automated evidence added: yes (`aws sesv2 list-email-identities`, `aws sesv2 get-account`, `aws sesv2 send-email`, `dotnet test --collect:"XPlat Code Coverage"` parsing, `npm run test:e2e:smoke`).
-- Blockers or handoff requests: backend true line coverage remains below 80% target (~67.3%); CI now enforces a merge-safe minimum floor (65%) and reports 80% as target until uplift lands.
+- Blockers or handoff requests: backend true line coverage remains below 80% target (~70.1% API excluding `/obj/`); CI now enforces a merge-safe minimum floor (65%) and reports 80% as target until uplift lands.
 
 ### 2026-03-28 - Mac Mini lane (budget alarms)
 
@@ -65,6 +65,15 @@ Check-in template:
 - Contracts touched: Notifications CDK stack now provisions AWS Budgets resources from deployment config (`thc-meal-planner-dev-monthly`, `thc-meal-planner-prod-monthly`).
 - Automated evidence added: yes (`npx cdk deploy ThcMealPlanner-dev-Notifications --context env=dev`, `npx cdk deploy ThcMealPlanner-prod-Notifications --context env=prod`, `aws budgets describe-budget ...`).
 - Blockers or handoff requests: full production deploy and smoke path still pending.
+
+### 2026-03-28 - Codespaces lane (backend coverage uplift pass)
+
+- Lane: Codespaces
+- Task: 7.6 backend coverage uplift (Chat + notifications path)
+- Status: In Progress
+- Contracts touched: backend test suite additions (`ChatServiceTests`, `SesNotificationServiceTests`, `MealPlanAiServiceTests`, `OpenAiApiKeyProviderTests`) and CI backend coverage policy (`.github/workflows/ci.yml`): minimum floor now 70% API-only excluding `/obj/`; changed backend API files on PR require >=80% line coverage.
+- Automated evidence added: yes (`dotnet test --filter FullyQualifiedName~ChatServiceTests`, `dotnet test --collect:"XPlat Code Coverage"`, Cobertura parse for API-only and root metrics).
+- Blockers or handoff requests: overall backend API line coverage is ~70.1% excluding `/obj/`; changed-file gate enforces >=80% for modified backend API source files in PRs while broader uplift continues.
 
 ## Ordered Delivery Todo Backlog (7.1-7.9)
 
