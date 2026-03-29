@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace ThcMealPlanner.Api.Authentication;
 
@@ -27,6 +28,25 @@ public static class CognitoAuthenticationServiceCollectionExtensions
                     ValidIssuer = authority,
                     ValidateAudience = true,
                     ValidAudience = options.ClientId,
+                    AudienceValidator = (audiences, securityToken, _) =>
+                    {
+                        if (audiences.Any(audience =>
+                            string.Equals(audience, options.ClientId, StringComparison.Ordinal)))
+                        {
+                            return true;
+                        }
+
+                        if (securityToken is JwtSecurityToken jwt)
+                        {
+                            var clientId = jwt.Claims
+                                .FirstOrDefault(claim => string.Equals(claim.Type, "client_id", StringComparison.OrdinalIgnoreCase))
+                                ?.Value;
+
+                            return string.Equals(clientId, options.ClientId, StringComparison.Ordinal);
+                        }
+
+                        return false;
+                    },
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
                     ClockSkew = TimeSpan.Zero,
