@@ -1,5 +1,6 @@
 import { CfnOutput, Duration, Stack } from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import type { AuthOutputs, SharedStackProps } from './stack-props';
 
@@ -69,6 +70,28 @@ export class AuthStack extends Stack {
       userPoolClientId: userPoolClient.userPoolClientId,
       userPoolDomain: domain.domainName
     };
+
+    // Idempotently ensure custom attributes exist on the pool.
+    // Cognito allows adding attributes but not removing them, so CloudFormation
+    // cannot manage them via the UserPool resource (a schema change forces pool
+    // replacement which would delete all users). An AwsCustomResource calls
+    // AddCustomAttributes on every deploy; Cognito ignores attributes that
+    // already exist, making this safe to run repeatedly.
+    new AwsCustomResource(this, 'AddCustomAttributes', {
+      onUpdate: {
+        service: 'CognitoIdentityServiceProvider',
+        action: 'addCustomAttributes',
+        parameters: {
+          UserPoolId: userPool.userPoolId,
+          CustomAttributes: [
+            { Name: 'familyId', AttributeDataType: 'String', Mutable: true, Required: false },
+            { Name: 'role',     AttributeDataType: 'String', Mutable: true, Required: false }
+          ]
+        },
+        physicalResourceId: PhysicalResourceId.of(`${prefix}-custom-attrs-v1`)
+      },
+      policy: AwsCustomResourcePolicy.fromSdkCalls({ resources: [userPool.userPoolArn] })
+    });
 
     new CfnOutput(this, 'UserPoolId', { value: this.outputs.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: this.outputs.userPoolClientId });
