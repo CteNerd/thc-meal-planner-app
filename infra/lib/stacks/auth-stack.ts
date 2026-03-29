@@ -10,6 +10,14 @@ export class AuthStack extends Stack {
     super(scope, id, props);
 
     const prefix = `thc-meal-planner-${props.deploymentConfig.name}`;
+    const allowedOrigins = props.deploymentConfig.domainName
+      ? [`https://${props.deploymentConfig.domainName}`]
+      : [];
+
+    if (props.deploymentConfig.name === 'dev') {
+      allowedOrigins.push('http://localhost:5173', 'http://127.0.0.1:5173');
+    }
+
     const userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: `${prefix}-user-pool`,
       signInAliases: { email: true },
@@ -36,7 +44,18 @@ export class AuthStack extends Stack {
       generateSecret: false,
       accessTokenValidity: Duration.hours(1),
       idTokenValidity: Duration.hours(1),
-      refreshTokenValidity: Duration.days(30)
+      refreshTokenValidity: Duration.days(30),
+      oAuth: allowedOrigins.length > 0
+        ? {
+            callbackUrls: allowedOrigins,
+            logoutUrls: allowedOrigins,
+            flows: {
+              authorizationCodeGrant: true
+            },
+            scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE]
+          }
+        : undefined,
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO]
     });
 
     const domain = userPool.addDomain('UserPoolDomain', {
