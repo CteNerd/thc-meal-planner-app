@@ -10,7 +10,8 @@ Living tracker for AI chatbot delivery with explicit parallel ownership across M
 ## Phase Status Summary
 
 - Codespaces implementation status: Done.
-- Remaining Phase 6 work: Mac Mini deployed/runtime validation (OpenAI secret wiring, latency/error-path checks, and authenticated real-session behavior verification).
+- Mac Mini automated deployed/runtime validation status: Done.
+- Remaining Phase 6 work: authenticated real-session behavior verification with Cognito MFA user.
 
 ## Check-In Protocol
 
@@ -82,6 +83,14 @@ Check-in template:
 - Contracts touched: Added `POST /api/chat/message/stream` SSE endpoint, structured pending-confirmation payloads (`ToolName`, `ArgumentsJson`) with deterministic confirm/cancel execution, multi-tool execution handling per turn, markdown rendering in chat UI, and hard allergy/exclusion filtering in recipe suggestion and meal-plan tool paths.
 - Blockers or handoff requests: No implementation blockers in Codespaces lane. Mac Mini lane should execute deployed validation checklist for secrets/runtime/authenticated behavior.
 
+### 2026-03-28 - Mac Mini lane
+
+- Lane: Mac Mini
+- Task: Phase 6 deployed/runtime validation
+- Status: Done
+- Contracts touched: Validated deployed dev stack outputs (`DistributionDomainName=d3ugym4rb87yys.cloudfront.net`, `ApiUrl=https://uryj6zpbfj.execute-api.us-east-1.amazonaws.com/dev/`), CloudFront/API health path behavior, unauthenticated auth challenge on `/api/profile`, CORS preflight for `/api/chat/message`, and Lambda environment/runtime wiring for OpenAI + Cognito + table/image configuration.
+- Blockers or handoff requests: Automated validation is complete. Remaining manual verification is an authenticated Cognito MFA chat session because the repo does not contain a non-interactive token acquisition path for the enrolled dev user.
+
 ## Status Board
 
 | Item | Description | Primary Owner | Status | Evidence / Notes |
@@ -94,6 +103,16 @@ Check-in template:
 | 6.6 | Conversation history (30-day TTL) | Codespaces | Done | Chat history storage/read endpoint and 30-day TTL persistence field implemented. |
 | 6.7 | Safety guardrails | Codespaces | Done | Topic restriction, input sanitization, and allergy/exclusion-safe filtering in tool handlers implemented. |
 
+## Automated Deployed Validation Evidence
+
+- Frontend root via CloudFront: `GET / -> 200`.
+- Health endpoint via CloudFront and direct API: `GET /api/health -> 200`.
+- Protected profile endpoint via CloudFront and direct API: `GET /api/profile -> 401` when unauthenticated.
+- CORS preflight: `OPTIONS /api/chat/message -> 204` and `OPTIONS /api/health -> 204` with wildcard origin, methods, and headers.
+- Lambda configuration: `thc-meal-planner-dev-api-handler`, runtime `provided.al2023`, architecture `arm64`, timeout `30`, memory `512`; required env vars present for OpenAI secret ARN, Cognito IDs, table prefix, and recipe images bucket.
+- Recent logs: earlier same-day `Runtime.InvalidEntrypoint` and `NullReferenceException` events exist in older streams, but latest stream shows healthy `/api/health -> 200` and `/api/profile -> 401` request handling with no current startup/runtime failure.
+- Validation correction: `/api/profiles/me` is not a deployed backend route in this codebase; CloudFront returns SPA HTML `200` for that path, so `/api/profile` is the correct protected-route check.
+
 ## Milestone Criteria Tracking
 
 - [x] Chatbot can generate meal plan via conversation
@@ -102,4 +121,4 @@ Check-in template:
 - [x] Destructive actions require confirmation
 - [x] 30-day history accessible and auto-deleted
 
-Implementation complete in Codespaces lane; deployed/runtime validation remains for Mac Mini lane.
+Phase 6 implementation and automated deployed validation are complete. Remaining manual validation is a real authenticated Cognito MFA chat session before Phase 7 work begins.
