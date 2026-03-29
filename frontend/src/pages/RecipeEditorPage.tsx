@@ -176,6 +176,59 @@ export function RecipeEditorPage() {
     }
   }
 
+  async function handleCreateImageDraft() {
+    if (isEditMode) {
+      setError('Image-first draft is only available when creating a new recipe.');
+      return;
+    }
+
+    if (!selectedFile) {
+      setError('Choose a recipe photo first.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+
+      const draftName = selectedFile.name.replace(/\.[^/.]+$/, '').trim();
+      const baseRecipe = await createRecipe({
+        name: draftName.length > 0 ? draftName : `Photo recipe draft ${new Date().toISOString().slice(0, 10)}`,
+        category: 'dinner',
+        description: 'Draft created from recipe image upload. Complete details after review.',
+        ingredients: [
+          {
+            name: 'Review uploaded image and add ingredients',
+            quantity: undefined,
+            unit: undefined,
+            section: undefined,
+            notes: undefined
+          }
+        ],
+        instructions: ['Review uploaded image and add preparation steps.'],
+        tags: ['draft'],
+        sourceType: 'image_upload'
+      });
+
+      const upload = await createRecipeUploadUrl(baseRecipe.recipeId, {
+        fileName: selectedFile.name,
+        contentType: selectedFile.type
+      });
+      await uploadRecipeImage(upload.uploadUrl, selectedFile);
+
+      const updated = await updateRecipe(baseRecipe.recipeId, {
+        imageKey: upload.imageKey,
+        sourceType: 'image_upload'
+      });
+
+      navigate(`/cookbook/${updated.recipeId}/edit`);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to create image draft recipe.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <Card>
       {isLoading ? (
@@ -207,17 +260,34 @@ export function RecipeEditorPage() {
             ) : null}
           </section>
 
+          <section className="rounded-3xl bg-slate-50 p-5">
+            <h3 className="text-lg font-semibold text-slate-900">Quick capture from photo</h3>
+            <p className="mt-1 text-sm text-slate-600">Snap a recipe card or handwritten note, upload now, and complete details later.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                aria-label="Recipe image file"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                className="w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-700"
+              />
+              <Button type="button" onClick={() => void handleCreateImageDraft()} disabled={isSaving || isEditMode || !selectedFile}>
+                Create draft from photo
+              </Button>
+            </div>
+          </section>
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
             <section className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-slate-700">
-                Name
-                <Input value={form.name} onChange={(event) => updateField(setForm, 'name', event.target.value)} aria-label="Recipe name" />
+                Name *
+                <Input required value={form.name} onChange={(event) => updateField(setForm, 'name', event.target.value)} aria-label="Recipe name" placeholder="Family Taco Bowls" />
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
-                Category
-                <select value={form.category} onChange={(event) => updateField(setForm, 'category', event.target.value)} aria-label="Recipe category" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100">
+                Category *
+                <select required value={form.category} onChange={(event) => updateField(setForm, 'category', event.target.value)} aria-label="Recipe category" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100">
                   <option value="breakfast">breakfast</option>
                   <option value="lunch">lunch</option>
                   <option value="dinner">dinner</option>
@@ -226,11 +296,11 @@ export function RecipeEditorPage() {
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Description
-                <textarea value={form.description} onChange={(event) => updateField(setForm, 'description', event.target.value)} aria-label="Recipe description" rows={3} className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
+                <textarea value={form.description} onChange={(event) => updateField(setForm, 'description', event.target.value)} aria-label="Recipe description" rows={3} placeholder="One-sentence overview of flavor and prep style" className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cuisine
-                <Input value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" />
+                <Input value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" placeholder="Mexican" />
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Tags
@@ -306,13 +376,15 @@ export function RecipeEditorPage() {
             <section className="grid gap-4 lg:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Source URL
-                <Input value={form.sourceUrl} onChange={(event) => updateField(setForm, 'sourceUrl', event.target.value)} aria-label="Recipe source URL" />
+                <Input value={form.sourceUrl} onChange={(event) => updateField(setForm, 'sourceUrl', event.target.value)} aria-label="Recipe source URL" placeholder="https://example.com/recipe" />
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Recipe image
                 <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Recipe image file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} className="w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-700" />
               </label>
             </section>
+
+            <p className="text-xs text-slate-500">Fields marked with * are required. Other fields are optional and can be added later.</p>
 
             <div className="flex flex-wrap justify-end gap-3">
               <Link to={isEditMode && recipeId ? `/cookbook/${recipeId}` : '/cookbook'}>

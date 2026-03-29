@@ -34,17 +34,20 @@ public sealed class MealPlanService : IMealPlanService
         ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
     private readonly IDynamoDbRepository<MealPlanDocument> _planRepository;
+    private readonly IDynamoDbRepository<FavoriteRecipeDocument> _favoriteRepository;
     private readonly IRecipeService _recipeService;
     private readonly IConstraintEngine _constraintEngine;
     private readonly IMealPlanAiService _mealPlanAiService;
 
     public MealPlanService(
         IDynamoDbRepository<MealPlanDocument> planRepository,
+        IDynamoDbRepository<FavoriteRecipeDocument> favoriteRepository,
         IRecipeService recipeService,
         IConstraintEngine constraintEngine,
         IMealPlanAiService mealPlanAiService)
     {
         _planRepository = planRepository;
+        _favoriteRepository = favoriteRepository;
         _recipeService = recipeService;
         _constraintEngine = constraintEngine;
         _mealPlanAiService = mealPlanAiService;
@@ -113,6 +116,11 @@ public sealed class MealPlanService : IMealPlanService
     public async Task<MealPlanDocument> GenerateAsync(string familyId, string userId, GenerateMealPlanRequest request, CancellationToken cancellationToken = default)
     {
         var recipes = await _recipeService.ListByFamilyAsync(familyId, cancellationToken);
+        var userFavorites = await _favoriteRepository.QueryByPartitionKeyAsync($"USER#{userId}", cancellationToken: cancellationToken);
+        var favoriteRecipeIds = userFavorites
+            .Select(favorite => favorite.RecipeId)
+            .Where(recipeId => !string.IsNullOrWhiteSpace(recipeId))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         if (recipes.Count == 0)
         {
@@ -138,6 +146,8 @@ public sealed class MealPlanService : IMealPlanService
 
         var random = new Random();
         var usedRecipeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var recipeUsageCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var previousRecipeByMealType = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var slots = new List<MealSlotDocument>();
         var violations = 0;
 
@@ -151,6 +161,9 @@ public sealed class MealPlanService : IMealPlanService
                     mealType,
                     usedRecipeIds,
                     recipesByCategory,
+                    favoriteRecipeIds,
+                    recipeUsageCounts,
+                    previousRecipeByMealType.TryGetValue(mealType, out var previousForMealType) ? previousForMealType : null,
                     random);
 
                 if (recipe is null)
@@ -159,6 +172,8 @@ public sealed class MealPlanService : IMealPlanService
                 }
 
                 usedRecipeIds.Add(recipe.RecipeId);
+                recipeUsageCounts[recipe.RecipeId] = recipeUsageCounts.GetValueOrDefault(recipe.RecipeId) + 1;
+                previousRecipeByMealType[mealType] = recipe.RecipeId;
 
                 var result = _constraintEngine.ValidateMealSlot(day, mealType, recipe);
                 if (!result.IsValid)
@@ -292,10 +307,14 @@ public sealed class MealPlanService : IMealPlanService
         string mealType,
         HashSet<string> usedRecipeIds,
         Dictionary<string, List<RecipeDocument>> recipesByCategory,
+        HashSet<string> favoriteRecipeIds,
+        Dictionary<string, int> recipeUsageCounts,
+        string? previousRecipeForMealType,
         Random random)
     {
         if (aiRecipeQueue.Count > 0)
         {
+            var typedCandidates = new List<(int QueueIndex, RecipeDocument Recipe)>();
             for (var i = 0; i < aiRecipeQueue.Count; i++)
             {
                 var candidateId = aiRecipeQueue[i];
@@ -308,11 +327,28 @@ public sealed class MealPlanService : IMealPlanService
 
                 if (string.Equals(candidate.Category, mealType, StringComparison.OrdinalIgnoreCase))
                 {
-                    aiRecipeQueue.RemoveAt(i);
-                    return candidate;
+                    typedCandidates.Add((i, candidate));
                 }
             }
 
+            if (typedCandidates.Count > 0)
+            {
+                var selected = SelectBestCandidate(
+                    typedCandidates.Select(candidate => candidate.Recipe),
+                    favoriteRecipeIds,
+                    recipeUsageCounts,
+                    previousRecipeForMealType,
+                    random);
+
+                var queueIndex = typedCandidates
+                    .First(candidate => string.Equals(candidate.Recipe.RecipeId, selected.RecipeId, StringComparison.OrdinalIgnoreCase))
+                    .QueueIndex;
+
+                aiRecipeQueue.RemoveAt(queueIndex);
+                return selected;
+            }
+
+            var anyCandidates = new List<(int QueueIndex, RecipeDocument Recipe)>();
             for (var i = 0; i < aiRecipeQueue.Count; i++)
             {
                 var candidateId = aiRecipeQueue[i];
@@ -322,8 +358,24 @@ public sealed class MealPlanService : IMealPlanService
                     continue;
                 }
 
-                aiRecipeQueue.RemoveAt(i);
-                return candidate;
+                anyCandidates.Add((i, candidate));
+            }
+
+            if (anyCandidates.Count > 0)
+            {
+                var selected = SelectBestCandidate(
+                    anyCandidates.Select(candidate => candidate.Recipe),
+                    favoriteRecipeIds,
+                    recipeUsageCounts,
+                    previousRecipeForMealType,
+                    random);
+
+                var queueIndex = anyCandidates
+                    .First(candidate => string.Equals(candidate.Recipe.RecipeId, selected.RecipeId, StringComparison.OrdinalIgnoreCase))
+                    .QueueIndex;
+
+                aiRecipeQueue.RemoveAt(queueIndex);
+                return selected;
             }
         }
 
@@ -348,7 +400,32 @@ public sealed class MealPlanService : IMealPlanService
             return null;
         }
 
-        return candidates[random.Next(candidates.Count)];
+        return SelectBestCandidate(candidates, favoriteRecipeIds, recipeUsageCounts, previousRecipeForMealType, random);
+    }
+
+    private static RecipeDocument SelectBestCandidate(
+        IEnumerable<RecipeDocument> candidates,
+        HashSet<string> favoriteRecipeIds,
+        Dictionary<string, int> recipeUsageCounts,
+        string? previousRecipeForMealType,
+        Random random)
+    {
+        return candidates
+            .Select(recipe => new
+            {
+                Recipe = recipe,
+                IsPreviousForMealType = !string.IsNullOrWhiteSpace(previousRecipeForMealType)
+                    && string.Equals(recipe.RecipeId, previousRecipeForMealType, StringComparison.OrdinalIgnoreCase),
+                UsageCount = recipeUsageCounts.GetValueOrDefault(recipe.RecipeId),
+                IsFavorite = favoriteRecipeIds.Contains(recipe.RecipeId),
+                TieBreaker = random.Next(0, 1_000_000)
+            })
+            .OrderBy(candidate => candidate.IsPreviousForMealType)
+            .ThenBy(candidate => candidate.UsageCount)
+            .ThenByDescending(candidate => candidate.IsFavorite)
+            .ThenBy(candidate => candidate.TieBreaker)
+            .Select(candidate => candidate.Recipe)
+            .First();
     }
 
     public async Task<MealPlanDocument?> UpdateAsync(string familyId, string weekStartDate, UpdateMealPlanRequest request, CancellationToken cancellationToken = default)

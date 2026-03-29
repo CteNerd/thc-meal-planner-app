@@ -282,6 +282,7 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
                 services.AddScoped<IGroceryListService, GroceryListService>();
                 services.AddScoped<IMealPlanService>(sp => new MealPlanService(
                     planRepository,
+                    favoriteRepository,
                     sp.GetRequiredService<IRecipeService>(),
                     constraintEngine,
                     sp.GetRequiredService<IMealPlanAiService>()));

@@ -27,7 +27,7 @@ public sealed class MealPlanServiceTests
             MaxWeekdayPrepMinutes = 45,
             MaxWeekendPrepMinutes = 180
         }));
-        return new MealPlanService(planRepo, recipeService, constraintEngine, mealPlanAiService);
+        return new MealPlanService(planRepo, favoriteRepo, recipeService, constraintEngine, mealPlanAiService);
     }
 
     [Fact]
