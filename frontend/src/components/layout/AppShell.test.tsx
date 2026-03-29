@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { AppShell } from './AppShell';
 
@@ -9,9 +10,11 @@ vi.mock('./Header', () => ({
 describe('AppShell', () => {
   it('renders header and main content', () => {
     render(
-      <AppShell>
-        <div>Dashboard content</div>
-      </AppShell>
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <AppShell>
+          <div>Dashboard content</div>
+        </AppShell>
+      </MemoryRouter>
     );
 
     expect(screen.getByText('Header stub')).toBeInTheDocument();

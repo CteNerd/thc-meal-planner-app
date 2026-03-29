@@ -23,6 +23,27 @@ export class AuthStack extends Stack {
       userPoolName: `${prefix}-user-pool`,
       signInAliases: { email: true },
       selfSignUpEnabled: false,
+      userInvitation: {
+        emailSubject: 'THC Meal Planner: Finish Setting Up Your Account',
+        emailBody: [
+          'Hi there,',
+          '',
+          'Your THC Meal Planner account is ready.',
+          '',
+          'Temporary sign-in details:',
+          'Username: {username}',
+          'Temporary password: {####}',
+          '',
+          'Next steps:',
+          '1) Sign in with the temporary password',
+          '2) Create a new password',
+          '3) Complete TOTP authenticator setup',
+          '',
+          'If you were not expecting this email, please reply to the household admin.',
+          '',
+          'THC Meal Planner'
+        ].join('\n')
+      },
       mfa: cognito.Mfa.REQUIRED,
       mfaSecondFactor: { sms: false, otp: true },
       passwordPolicy: {
