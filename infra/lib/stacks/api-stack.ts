@@ -1,6 +1,7 @@
 import { CfnOutput, Stack } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { DotnetLambdaFunction } from '../constructs/lambda-function';
@@ -43,6 +44,11 @@ export class ApiStack extends Stack {
     Object.values(props.data.tableNames).forEach((tableName) => {
       const table = dynamodb.Table.fromTableName(this, `${tableName}Ref`, tableName);
       table.grantReadWriteData(handler.function);
+
+      handler.function.addToRolePolicy(new iam.PolicyStatement({
+        actions: ['dynamodb:Query', 'dynamodb:Scan'],
+        resources: [`${table.tableArn}/index/*`]
+      }));
     });
 
     const api = new apigateway.LambdaRestApi(this, 'RestApi', {

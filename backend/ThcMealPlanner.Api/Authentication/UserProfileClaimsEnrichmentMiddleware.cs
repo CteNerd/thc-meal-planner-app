@@ -17,7 +17,7 @@ public sealed class UserProfileClaimsEnrichmentMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, IDynamoDbRepository<UserProfileDocument> repository)
+    public async Task InvokeAsync(HttpContext context)
     {
         var user = context.User;
 
@@ -30,6 +30,14 @@ public sealed class UserProfileClaimsEnrichmentMiddleware
             {
                 try
                 {
+                    var repository = context.RequestServices.GetService<IDynamoDbRepository<UserProfileDocument>>();
+
+                    if (repository is null)
+                    {
+                        await _next(context);
+                        return;
+                    }
+
                     var profile = await repository.GetAsync(new DynamoDbKey($"USER#{sub}", "PROFILE"), context.RequestAborted);
 
                     if (profile is not null && !string.IsNullOrWhiteSpace(profile.FamilyId) && user.Identity is ClaimsIdentity identity)
