@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiFetch, configureApiClient, getApiErrorMessage } from './api';
+import { ApiError, apiDelete, apiFetch, apiGet, apiPost, apiPut, configureApiClient, getApiErrorMessage } from './api';
 
 describe('getApiErrorMessage', () => {
   it('returns detail when available', () => {
@@ -116,5 +116,37 @@ describe('apiFetch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(refreshSession).toHaveBeenCalledTimes(1);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('apiGet/apiPost/apiPut return parsed payloads', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'g1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'p1' }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'u1' }), { status: 200 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiGet<{ id: string }>('/resource')).resolves.toEqual({ id: 'g1' });
+    await expect(apiPost<{ id: string }, { name: string }>('/resource', { name: 'post' })).resolves.toEqual({ id: 'p1' });
+    await expect(apiPut<{ id: string }, { name: string }>('/resource', { name: 'put' })).resolves.toEqual({ id: 'u1' });
+  });
+
+  it('apiDelete succeeds on ok response and throws ApiError otherwise', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'Cannot delete' }), { status: 409 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiDelete('/resource/1')).resolves.toBeUndefined();
+    await expect(apiDelete('/resource/2')).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('throws ApiError when readJsonOrThrow receives non-ok response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'Bad request' }), { status: 400 }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiGet('/resource')).rejects.toBeInstanceOf(ApiError);
   });
 });
