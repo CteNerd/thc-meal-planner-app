@@ -1,22 +1,14 @@
-name: Deploy Dev
+name: Deploy Prod
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Deployment environment context
-        required: true
-        default: dev
-        type: choice
-        options:
-          - dev
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: deploy-dev
+  group: deploy-prod
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      DEPLOY_ENV: ${{ inputs.environment }}
+      DEPLOY_ENV: prod
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,7 +57,7 @@ jobs:
         working-directory: ./infra
         run: npx cdk bootstrap aws://${{ steps.aws-account.outputs.account_id }}/${{ env.AWS_REGION }} --context env=${{ env.DEPLOY_ENV }}
 
-      - name: Deploy CDK stacks
+      - name: Deploy CDK stacks (prod)
         working-directory: ./infra
         run: npx cdk deploy --all --context env=${{ env.DEPLOY_ENV }} --require-approval never
 
@@ -133,6 +125,6 @@ jobs:
             exit 1
           fi
 
-      - name: Run automated dev smoke checks
+      - name: Run automated prod smoke checks
         run: |
-          bash scripts/validate-deployment.sh "https://${{ steps.outputs.outputs.distribution_domain }}" "dev"
+          bash scripts/validate-deployment.sh "https://${{ steps.outputs.outputs.distribution_domain }}" "prod"

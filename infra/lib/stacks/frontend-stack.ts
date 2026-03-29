@@ -20,12 +20,42 @@ export class FrontendStack extends Stack {
     const apiDomainName = Fn.select(2, apiUrlParts);
     const apiStagePath = Fn.join('', ['/', Fn.select(3, apiUrlParts)]);
 
+    const frontendSecurityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'FrontendSecurityHeaders', {
+      securityHeadersBehavior: {
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: true,
+          preload: true,
+          override: true
+        },
+        xssProtection: { protection: true, modeBlock: true, override: true },
+        contentSecurityPolicy: {
+          contentSecurityPolicy:
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+          override: true
+        }
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          {
+            header: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+            override: true
+          }
+        ]
+      }
+    });
+
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: frontendSecurityHeaders,
         compress: true
       },
       additionalBehaviors: {
@@ -36,6 +66,7 @@ export class FrontendStack extends Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS
         },

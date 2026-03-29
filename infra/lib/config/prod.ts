@@ -14,5 +14,10 @@ export const prodConfig: DeploymentConfig = {
       rateLimit: 50,
       burstLimit: 100
     }
+  },
+  budgets: {
+    monthlyLimitUsd: 15,
+    alertThresholdPercent: 80,
+    alertEmails: ['rtomlin62@gmail.com']
   }
 };

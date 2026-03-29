@@ -9,6 +9,9 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      BACKEND_COVERAGE_MIN: '65'
+      BACKEND_COVERAGE_TARGET: '80'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,7 +28,38 @@ jobs:
         run: dotnet build backend/ThcMealPlanner.sln --no-restore --configuration Release
 
       - name: Test backend with coverage
-        run: dotnet test backend/ThcMealPlanner.sln --no-build --configuration Release --collect:"XPlat Code Coverage"
+        run: >
+          dotnet test backend/ThcMealPlanner.Tests/ThcMealPlanner.Tests.csproj
+          --no-build --configuration Release
+          --collect:"XPlat Code Coverage"
+          --results-directory backend/TestResults
+
+      - name: Enforce backend coverage threshold
+        run: |
+          python3 - <<'PY'
+          import os
+          import glob
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob('backend/TestResults/**/coverage.cobertura.xml', recursive=True)
+          if not files:
+              raise SystemExit('No backend coverage.cobertura.xml found')
+
+          tree = ET.parse(files[0])
+          root = tree.getroot()
+          line_rate = float(root.attrib.get('line-rate', '0'))
+          line_pct = line_rate * 100
+          print(f'Backend line coverage: {line_pct:.2f}%')
+
+            minimum = float(os.environ.get('BACKEND_COVERAGE_MIN', '65'))
+            target = float(os.environ.get('BACKEND_COVERAGE_TARGET', '80'))
+
+            if line_pct < minimum:
+              raise SystemExit(f'Backend coverage below minimum: {line_pct:.2f}% < {minimum:.2f}%')
+
+            if line_pct < target:
+              print(f'WARNING: Backend coverage below target: {line_pct:.2f}% < {target:.2f}%')
+          PY
 
   frontend:
     runs-on: ubuntu-latest
@@ -59,7 +93,35 @@ jobs:
 
       - name: Test frontend with coverage
         working-directory: ./frontend
-        run: npm run test -- --coverage
+        run: npm run test:coverage
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    needs:
+      - frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright smoke suite
+        working-directory: ./frontend
+        run: npm run test:e2e:smoke
 
   infra:
     runs-on: ubuntu-latest

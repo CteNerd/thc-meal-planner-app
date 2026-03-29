@@ -13,4 +13,9 @@ export type DeploymentConfig = {
       burstLimit: number;
     };
   };
+  budgets: {
+    monthlyLimitUsd: number;
+    alertThresholdPercent: number;
+    alertEmails: string[];
+  };
 };
