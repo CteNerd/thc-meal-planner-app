@@ -4,7 +4,9 @@ export const devConfig: DeploymentConfig = {
   name: 'dev',
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: 'us-east-1',
-  domainName: undefined,
+  domainName: 'dev-thc-mealplanner.tomlin.life',
+  hostedZoneId: 'Z09770441ES3ZDJB86W5A',
+  hostedZoneName: 'tomlin.life',
   lambda: {
     memory: 512,
     timeout: 30
