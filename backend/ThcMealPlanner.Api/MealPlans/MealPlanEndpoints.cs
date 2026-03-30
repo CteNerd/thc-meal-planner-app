@@ -92,8 +92,8 @@ public static class MealPlanEndpoints
             day,
             mealType,
             limit ?? 5,
-            profileContext,
-            cancellationToken);
+            cancellationToken,
+            profileContext: profileContext);
 
         return Results.Ok(suggestions);
     }

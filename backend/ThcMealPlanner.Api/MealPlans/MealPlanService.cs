@@ -21,8 +21,8 @@ public interface IMealPlanService
         string day,
         string mealType,
         int limit = 5,
-        string? profileContext = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? profileContext = null);
 
     Task<MealPlanDocument?> UpdateAsync(string familyId, string weekStartDate, UpdateMealPlanRequest request, CancellationToken cancellationToken = default);
 
@@ -226,8 +226,8 @@ public sealed class MealPlanService : IMealPlanService
         string day,
         string mealType,
         int limit = 5,
-        string? profileContext = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? profileContext = null)
     {
         var normalizedLimit = Math.Clamp(limit, 1, 10);
         var plan = await _planRepository.GetAsync(ToPlanKey(familyId, weekStartDate), cancellationToken);

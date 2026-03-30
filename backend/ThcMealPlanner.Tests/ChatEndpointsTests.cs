@@ -258,7 +258,7 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
 
         public Task<MealPlanDocument> GenerateAsync(string familyId, string userId, GenerateMealPlanRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new MealPlanDocument());
 
-public Task<IReadOnlyList<MealSwapSuggestion>> SuggestSwapOptionsAsync(string familyId, string weekStartDate, string day, string mealType, int limit = 5, string? profileContext = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MealSwapSuggestion>>([]);
+    public Task<IReadOnlyList<MealSwapSuggestion>> SuggestSwapOptionsAsync(string familyId, string weekStartDate, string day, string mealType, int limit = 5, CancellationToken cancellationToken = default, string? profileContext = null) => Task.FromResult<IReadOnlyList<MealSwapSuggestion>>([]);
 
         public Task<MealPlanDocument?> UpdateAsync(string familyId, string weekStartDate, UpdateMealPlanRequest request, CancellationToken cancellationToken = default) => Task.FromResult<MealPlanDocument?>(null);
 
