@@ -129,6 +129,10 @@ export function isApiError(error: unknown): error is ApiError {
 
 export function getApiErrorMessage(error: unknown, fallbackMessage: string): string {
   if (!isApiError(error)) {
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message;
+    }
+
     return fallbackMessage;
   }
 

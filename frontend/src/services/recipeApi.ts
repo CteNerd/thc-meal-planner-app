@@ -48,7 +48,22 @@ export async function uploadRecipeImage(uploadUrl: string, file: File): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Image upload failed with status ${response.status}`);
+    let responseBody = '';
+    try {
+      responseBody = (await response.text()).trim();
+    } catch {
+      responseBody = '';
+    }
+
+    const bodyHint = responseBody.length > 0
+      ? ` Response: ${responseBody.slice(0, 180)}`
+      : '';
+
+    throw new Error(
+      `Image upload failed (${response.status} ${response.statusText}). ` +
+      'Please retry with a JPG/PNG/WEBP image under 10MB.' +
+      bodyHint
+    );
   }
 }
 

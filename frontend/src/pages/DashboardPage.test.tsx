@@ -120,7 +120,7 @@ describe('DashboardPage', () => {
 
     renderDashboard();
 
-    expect(await screen.findByText('Some dashboard data could not be loaded.')).toBeTruthy();
+    expect(await screen.findByText('no meal plan')).toBeTruthy();
     expect(await screen.findByText('No active meal plan yet. Generate a new plan to start the week.')).toBeTruthy();
     expect(await screen.findByText('No active grocery list yet. Generate one from your meal plan.')).toBeTruthy();
   });

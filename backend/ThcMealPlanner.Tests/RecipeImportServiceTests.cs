@@ -102,6 +102,53 @@ public sealed class RecipeImportServiceTests
             .WithMessage("*Localhost URLs are not allowed.*");
     }
 
+    [Fact]
+    public void ParseImportedRecipeDraft_WhenJsonLdUsesObjectVariants_ParsesWithoutArrayConversionErrors()
+    {
+        var sourceUrl = new Uri("https://example.com/object-variants");
+        const string html = """
+            <html>
+              <body>
+                <script type="application/ld+json">
+                {
+                  "@context": "https://schema.org",
+                  "@type": "Recipe",
+                  "name": "One Pot Pasta",
+                  "recipeCategory": ["Dinner", "Pasta"],
+                  "recipeCuisine": { "name": "Italian" },
+                  "recipeYield": ["4 servings"],
+                  "keywords": ["quick", "one-pot"],
+                  "recipeIngredient": {
+                    "itemListElement": [
+                      { "@type": "HowToStep", "text": "12 oz pasta" },
+                      { "@type": "HowToStep", "text": "2 cups broth" }
+                    ]
+                  },
+                  "recipeInstructions": {
+                    "@type": "HowToSection",
+                    "itemListElement": [
+                      { "@type": "HowToStep", "text": "Add pasta and broth." },
+                      { "@type": "HowToStep", "text": "Simmer until tender." }
+                    ]
+                  }
+                }
+                </script>
+              </body>
+            </html>
+            """;
+
+        var draft = RecipeImportService.ParseImportedRecipeDraft(sourceUrl, html);
+
+        draft.Name.Should().Be("One Pot Pasta");
+        draft.Category.Should().Be("dinner");
+        draft.Cuisine.Should().Be("Italian");
+        draft.Servings.Should().Be(4);
+        draft.Tags.Should().Contain(["quick", "one-pot"]);
+        draft.Ingredients.Select(i => i.Name).Should().Contain(["12 oz pasta", "2 cups broth"]);
+        draft.Instructions.Should().ContainInOrder("Add pasta and broth.", "Simmer until tender.");
+        draft.Warnings.Should().BeEmpty();
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

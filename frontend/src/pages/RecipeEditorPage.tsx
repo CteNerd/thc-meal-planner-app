@@ -139,7 +139,12 @@ export function RecipeEditorPage() {
       }));
       setImportWarnings(draft.warnings);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to import recipe draft from URL.'));
+      const message = getApiErrorMessage(err, 'Unable to import recipe draft from URL.');
+      if (/converted|mapped|array|json/i.test(message)) {
+        setError('That recipe site uses a non-standard format we could not auto-map. Try another URL, or create a draft manually and paste ingredients/instructions.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -223,7 +228,7 @@ export function RecipeEditorPage() {
 
       navigate(`/cookbook/${updated.recipeId}/edit`);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to create image draft recipe.'));
+      setError(getApiErrorMessage(err, 'Unable to create image draft recipe. Try a JPG/PNG/WEBP image under 10MB.'));
     } finally {
       setIsSaving(false);
     }

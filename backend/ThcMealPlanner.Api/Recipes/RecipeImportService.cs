@@ -320,14 +320,14 @@ public sealed partial class RecipeImportService : IRecipeImportService
     {
         var name = GetString(recipe, "name") ?? "Imported recipe";
         var description = GetString(recipe, "description");
-        var cuisine = GetString(recipe, "recipeCuisine");
-        var category = NormalizeCategory(GetString(recipe, "recipeCategory"));
-        var servings = ParseFirstInt(GetString(recipe, "recipeYield"));
+        var cuisine = GetFirstStringLike(recipe, "recipeCuisine");
+        var category = NormalizeCategory(GetFirstStringLike(recipe, "recipeCategory"));
+        var servings = ParseFirstInt(GetFirstStringLike(recipe, "recipeYield"));
         var prepTimeMinutes = ParseDurationMinutes(GetString(recipe, "prepTime"));
         var cookTimeMinutes = ParseDurationMinutes(GetString(recipe, "cookTime"));
-        var proteinSource = ParseDelimitedList(GetString(recipe, "proteinSource"));
-        var cookingMethod = ParseDelimitedList(GetString(recipe, "cookingMethod"));
-        var tags = ParseDelimitedList(GetString(recipe, "keywords"));
+        var proteinSource = GetStringListLike(recipe, "proteinSource");
+        var cookingMethod = GetStringListLike(recipe, "cookingMethod");
+        var tags = GetStringListLike(recipe, "keywords");
         var ingredients = ParseJsonLdIngredients(recipe);
         var instructions = ParseJsonLdInstructions(recipe);
 
@@ -366,16 +366,15 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
     private static List<RecipeIngredientModel> ParseJsonLdIngredients(JsonElement recipe)
     {
-        if (!recipe.TryGetProperty("recipeIngredient", out var ingredientsElement) || ingredientsElement.ValueKind != JsonValueKind.Array)
+        if (!recipe.TryGetProperty("recipeIngredient", out var ingredientsElement))
         {
             return [];
         }
 
-        return ingredientsElement.EnumerateArray()
-            .Where(item => item.ValueKind == JsonValueKind.String)
-            .Select(item => item.GetString()?.Trim())
+        var rawItems = ExtractStringValues(ingredientsElement, "text", "name", "itemListElement");
+        return rawItems
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => new RecipeIngredientModel { Name = value! })
+            .Select(value => new RecipeIngredientModel { Name = value.Trim() })
             .Take(30)
             .ToList();
     }
@@ -420,9 +419,70 @@ public sealed partial class RecipeImportService : IRecipeImportService
                     }
                 }
                 break;
+            case JsonValueKind.Object:
+                // Some sites wrap steps in HowToSection/itemListElement objects.
+                instructions.AddRange(ExtractStringValues(instructionsElement, "text", "name", "itemListElement"));
+                break;
         }
 
         return instructions.Take(30).ToList();
+    }
+
+    private static string? GetFirstStringLike(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        return ExtractStringValues(property, "text", "name").FirstOrDefault();
+    }
+
+    private static List<string> GetStringListLike(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return [];
+        }
+
+        return ExtractStringValues(property, "text", "name")
+            .SelectMany(ParseDelimitedList)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+    }
+
+    private static List<string> ExtractStringValues(JsonElement element, params string[] objectPropertyNames)
+    {
+        var result = new List<string>();
+
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                var value = element.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    result.Add(value.Trim());
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    result.AddRange(ExtractStringValues(item, objectPropertyNames));
+                }
+                break;
+            case JsonValueKind.Object:
+                foreach (var propertyName in objectPropertyNames)
+                {
+                    if (element.TryGetProperty(propertyName, out var nested))
+                    {
+                        result.AddRange(ExtractStringValues(nested, objectPropertyNames));
+                    }
+                }
+                break;
+        }
+
+        return result;
     }
 
     private static string NormalizeCategory(string? rawCategory)

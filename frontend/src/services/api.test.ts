@@ -36,10 +36,10 @@ describe('getApiErrorMessage', () => {
     expect(message).toBe('Name is required.');
   });
 
-  it('returns fallback for non-ApiError', () => {
+  it('returns Error.message for non-ApiError', () => {
     const message = getApiErrorMessage(new Error('boom'), 'fallback');
 
-    expect(message).toBe('fallback');
+    expect(message).toBe('boom');
   });
 });
 
