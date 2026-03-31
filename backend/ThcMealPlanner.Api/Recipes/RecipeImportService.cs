@@ -1,6 +1,10 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
+using ThcMealPlanner.Api.MealPlans;
 
 namespace ThcMealPlanner.Api.Recipes;
 
@@ -12,11 +16,32 @@ public interface IRecipeImportService
 public sealed partial class RecipeImportService : IRecipeImportService
 {
     private const int MaxResponseBytes = 1024 * 1024;
+    private const int MaxAiInputCharacters = 24000;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly HttpClient _httpClient;
+    private readonly IOpenAiApiKeyProvider? _apiKeyProvider;
+    private readonly OpenAiOptions _openAiOptions;
+    private readonly ILogger<RecipeImportService>? _logger;
 
     public RecipeImportService(HttpClient httpClient)
+        : this(httpClient, null, null, null)
+    {
+    }
+
+    public RecipeImportService(
+        HttpClient httpClient,
+        IOpenAiApiKeyProvider? apiKeyProvider,
+        IOptions<OpenAiOptions>? openAiOptions,
+        ILogger<RecipeImportService>? logger)
     {
         _httpClient = httpClient;
+        _apiKeyProvider = apiKeyProvider;
+        _openAiOptions = openAiOptions?.Value ?? new OpenAiOptions();
+        _logger = logger;
         _httpClient.Timeout = TimeSpan.FromSeconds(10);
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("THCMealPlannerRecipeImporter/1.0");
     }
@@ -45,7 +70,26 @@ public sealed partial class RecipeImportService : IRecipeImportService
         }
 
         var html = System.Text.Encoding.UTF8.GetString(memory.ToArray());
-        return ParseImportedRecipeDraft(uri, html);
+        return await ParseImportedRecipeDraftAsync(uri, html, cancellationToken);
+    }
+
+    internal async Task<ImportedRecipeDraft> ParseImportedRecipeDraftAsync(
+        Uri sourceUrl,
+        string html,
+        CancellationToken cancellationToken = default)
+    {
+        if (TryParseJsonLdDraft(sourceUrl, html, out var jsonLdDraft))
+        {
+            return jsonLdDraft;
+        }
+
+        var aiDraft = await TryParseAiDraftAsync(sourceUrl, html, cancellationToken);
+        if (aiDraft is not null)
+        {
+            return aiDraft;
+        }
+
+        return ParseDraftFromText(sourceUrl, html);
     }
 
     internal static ImportedRecipeDraft ParseImportedRecipeDraft(Uri sourceUrl, string html)
@@ -56,6 +100,233 @@ public sealed partial class RecipeImportService : IRecipeImportService
         }
 
         return ParseDraftFromText(sourceUrl, html);
+    }
+
+    private async Task<ImportedRecipeDraft?> TryParseAiDraftAsync(Uri sourceUrl, string html, CancellationToken cancellationToken)
+    {
+        if (_apiKeyProvider is null)
+        {
+            return null;
+        }
+
+        var apiKey = await _apiKeyProvider.GetApiKeyAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return null;
+        }
+
+        var pageText = NormalizeWhitespace(StripHtml(html));
+        if (string.IsNullOrWhiteSpace(pageText))
+        {
+            return null;
+        }
+
+        if (pageText.Length > MaxAiInputCharacters)
+        {
+            pageText = pageText[..MaxAiInputCharacters];
+        }
+
+        var payload = new
+        {
+            model = _openAiOptions.Model,
+            temperature = 0.1,
+            response_format = new { type = "json_object" },
+            messages = new object[]
+            {
+                new
+                {
+                    role = "system",
+                    content = "Extract a recipe from webpage text. Return strict JSON only with no markdown or prose."
+                },
+                new
+                {
+                    role = "user",
+                    content = BuildAiExtractionPrompt(sourceUrl, pageText)
+                }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_openAiOptions.BaseUrl.TrimEnd('/')}/chat/completions")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        try
+        {
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger?.LogWarning("AI recipe extraction request failed with status {StatusCode}. Falling back to heuristic parser.", (int)response.StatusCode);
+                return null;
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var content = ExtractAiMessageContent(body);
+            return ParseAiDraftContent(sourceUrl, content);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "AI recipe extraction failed. Falling back to heuristic parser.");
+            return null;
+        }
+    }
+
+    private static string BuildAiExtractionPrompt(Uri sourceUrl, string pageText)
+    {
+        return string.Join('\n',
+        [
+            "Extract one recipe from this page text.",
+            "Return strict JSON in this shape only:",
+            "{\"name\":\"\",\"description\":\"\",\"category\":\"breakfast|lunch|dinner|snack\",\"cuisine\":\"\",\"servings\":0,\"prepTimeMinutes\":0,\"cookTimeMinutes\":0,\"tags\":[\"\"],\"ingredients\":[\"\"],\"instructions\":[\"\"]}",
+            "Rules:",
+            "- Use null for unknown scalar values.",
+            "- Keep ingredients as concise strings.",
+            "- Keep instructions as ordered steps.",
+            "- Do not invent data not supported by the page.",
+            $"Source URL: {sourceUrl}",
+            "Page text:",
+            pageText
+        ]);
+    }
+
+    private static ImportedRecipeDraft? ParseAiDraftContent(Uri sourceUrl, string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(content);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var root = doc.RootElement;
+            var name = GetString(root, "name")?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            var ingredients = ParseAiIngredientList(root, "ingredients");
+            var instructions = ParseAiStepList(root, "instructions");
+            var warnings = new List<string> { "AI-assisted extraction was used. Review before saving." };
+
+            if (ingredients.Count == 0)
+            {
+                warnings.Add("AI extraction did not find ingredients. Review source before saving.");
+                ingredients = [new RecipeIngredientModel { Name = "Review source and add ingredients." }];
+            }
+
+            if (instructions.Count == 0)
+            {
+                warnings.Add("AI extraction did not find instructions. Review source before saving.");
+                instructions = ["Review source and add preparation steps."];
+            }
+
+            return new ImportedRecipeDraft
+            {
+                Name = name,
+                Description = GetString(root, "description"),
+                Category = NormalizeCategory(GetString(root, "category")),
+                Cuisine = GetString(root, "cuisine"),
+                Servings = ParseFirstInt(GetString(root, "servings")) ?? ParseInt(root, "servings"),
+                PrepTimeMinutes = ParseFirstInt(GetString(root, "prepTimeMinutes")) ?? ParseInt(root, "prepTimeMinutes"),
+                CookTimeMinutes = ParseFirstInt(GetString(root, "cookTimeMinutes")) ?? ParseInt(root, "cookTimeMinutes"),
+                Tags = ParseAiStringList(root, "tags"),
+                Ingredients = ingredients,
+                Instructions = instructions,
+                SourceType = "url",
+                SourceUrl = sourceUrl.ToString(),
+                Warnings = warnings
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static List<string> ParseAiStringList(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var property))
+        {
+            return [];
+        }
+
+        return ExtractStringValues(property, "text", "name", "item", "itemListElement")
+            .SelectMany(ParseDelimitedList)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToList();
+    }
+
+    private static List<RecipeIngredientModel> ParseAiIngredientList(JsonElement root, string propertyName)
+    {
+        var values = ParseAiStringList(root, propertyName);
+        return values
+            .Select(v => new RecipeIngredientModel { Name = v.Trim() })
+            .Take(30)
+            .ToList();
+    }
+
+    private static List<string> ParseAiStepList(JsonElement root, string propertyName)
+    {
+        return ParseAiStringList(root, propertyName)
+            .Select(CleanListLine)
+            .Where(step => !string.IsNullOrWhiteSpace(step))
+            .Take(30)
+            .ToList();
+    }
+
+    private static int? ParseInt(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.Number when property.TryGetInt32(out var number) => number,
+            JsonValueKind.String => ParseFirstInt(property.GetString()),
+            _ => null
+        };
+    }
+
+    private static string? ExtractAiMessageContent(string responseBody)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            var first = choices[0];
+            if (!first.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (!message.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            return content.GetString();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static Uri ValidateUrl(string url)

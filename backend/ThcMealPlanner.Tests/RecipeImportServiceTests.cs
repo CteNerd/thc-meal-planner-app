@@ -1,4 +1,7 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using ThcMealPlanner.Api.MealPlans;
 using ThcMealPlanner.Api.Recipes;
 
 namespace ThcMealPlanner.Tests;
@@ -149,6 +152,46 @@ public sealed class RecipeImportServiceTests
         draft.Warnings.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ParseImportedRecipeDraftAsync_WhenJsonLdMissing_UsesAiFallbackWhenConfigured()
+    {
+        const string openAiResponse = """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"name\":\"Crispy Buffalo Wings\",\"description\":\"Spicy baked wings.\",\"category\":\"dinner\",\"cuisine\":\"American\",\"servings\":4,\"prepTimeMinutes\":15,\"cookTimeMinutes\":40,\"tags\":[\"spicy\",\"game day\"],\"ingredients\":[\"2 lb chicken wings\",\"1/2 cup buffalo sauce\"],\"instructions\":[\"Pat wings dry.\",\"Bake until crisp.\",\"Toss in sauce.\"]}"
+                  }
+                }
+              ]
+            }
+            """;
+
+        using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler(openAiResponse));
+        var service = new RecipeImportService(
+            httpClient,
+            new StubApiKeyProvider("sk-test"),
+            Options.Create(new OpenAiOptions()),
+            NullLogger<RecipeImportService>.Instance);
+
+        var draft = await service.ParseImportedRecipeDraftAsync(
+            new Uri("https://example.com/ai-fallback"),
+            "<html><head><title>Wings</title></head><body><h1>Buffalo Wings</h1><p>Bake and toss in sauce.</p></body></html>",
+            CancellationToken.None);
+
+        draft.Name.Should().Be("Crispy Buffalo Wings");
+        draft.Description.Should().Be("Spicy baked wings.");
+        draft.Category.Should().Be("dinner");
+        draft.Cuisine.Should().Be("American");
+        draft.Servings.Should().Be(4);
+        draft.PrepTimeMinutes.Should().Be(15);
+        draft.CookTimeMinutes.Should().Be(40);
+        draft.Tags.Should().Contain(["spicy", "game day"]);
+        draft.Ingredients.Select(i => i.Name).Should().Contain(["2 lb chicken wings", "1/2 cup buffalo sauce"]);
+        draft.Instructions.Should().ContainInOrder("Pat wings dry.", "Bake until crisp.", "Toss in sauce.");
+        draft.Warnings.Should().Contain("AI-assisted extraction was used. Review before saving.");
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -157,6 +200,44 @@ public sealed class RecipeImportServiceTests
             {
                 Content = new StringContent("<html><title>stub</title></html>")
             });
+        }
+    }
+
+    private sealed class OpenAiOnlyHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly string _responseBody;
+
+        public OpenAiOnlyHttpMessageHandler(string responseBody)
+        {
+            _responseBody = responseBody;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            request.RequestUri.Should().NotBeNull();
+            request.RequestUri!.ToString().Should().Contain("/chat/completions");
+            request.Headers.Authorization.Should().NotBeNull();
+            request.Headers.Authorization!.Scheme.Should().Be("Bearer");
+
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(_responseBody)
+            });
+        }
+    }
+
+    private sealed class StubApiKeyProvider : IOpenAiApiKeyProvider
+    {
+        private readonly string? _apiKey;
+
+        public StubApiKeyProvider(string? apiKey)
+        {
+            _apiKey = apiKey;
+        }
+
+        public Task<string?> GetApiKeyAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_apiKey);
         }
     }
 }
