@@ -53,19 +53,50 @@ public sealed partial class RecipeImportService : IRecipeImportService
         using var memory = new MemoryStream();
         var buffer = new byte[8192];
         int bytesRead;
+        var responseTruncated = false;
 
         while ((bytesRead = await stream.ReadAsync(buffer, cancellationToken)) > 0)
         {
-            if (memory.Length + bytesRead > MaxResponseBytes)
+            var remainingBytes = MaxResponseBytes - (int)memory.Length;
+            if (remainingBytes <= 0)
             {
-                throw new InvalidOperationException("Recipe source exceeded the 1 MB response limit.");
+                responseTruncated = true;
+                break;
             }
 
-            await memory.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+            var bytesToWrite = Math.Min(bytesRead, remainingBytes);
+            await memory.WriteAsync(buffer.AsMemory(0, bytesToWrite), cancellationToken);
+
+            if (bytesToWrite < bytesRead)
+            {
+                responseTruncated = true;
+                break;
+            }
         }
 
         var html = System.Text.Encoding.UTF8.GetString(memory.ToArray());
-        return await ParseImportedRecipeDraftAsync(uri, html, cancellationToken);
+        try
+        {
+            var draft = await ParseImportedRecipeDraftAsync(uri, html, cancellationToken);
+            if (responseTruncated)
+            {
+                draft.Warnings.Add("Source page was larger than 1 MB; import used a truncated snapshot. Review before saving.");
+            }
+
+            return draft;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+        {
+            _logger?.LogWarning(ex, "Recipe parsing failed; falling back to best-effort text extraction.");
+            var fallbackDraft = ParseDraftFromText(uri, html);
+            if (responseTruncated)
+            {
+                fallbackDraft.Warnings.Add("Source page was larger than 1 MB; import used a truncated snapshot. Review before saving.");
+            }
+
+            fallbackDraft.Warnings.Add("Structured parsing failed; used best-effort text extraction.");
+            return fallbackDraft;
+        }
     }
 
     internal async Task<ImportedRecipeDraft> ParseImportedRecipeDraftAsync(

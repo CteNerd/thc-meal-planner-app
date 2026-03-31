@@ -140,7 +140,7 @@ export function RecipeEditorPage() {
       setImportWarnings(draft.warnings);
     } catch (err) {
       const message = getApiErrorMessage(err, 'Unable to import recipe draft from URL.');
-      if (/converted|mapped|array|json/i.test(message)) {
+      if (/could not be converted|cannot be converted|mapped to an array|element of type/i.test(message)) {
         setError('That recipe site uses a non-standard format we could not auto-map. Try another URL, or create a draft manually and paste ingredients/instructions.');
       } else {
         setError(message);
