@@ -157,6 +157,46 @@ public sealed class RecipeImportServiceTests
     }
 
     [Fact]
+    public void ParseImportedRecipeDraft_WhenJsonLdContainsArrayNodes_DoesNotThrowAndParsesRecipe()
+    {
+        var sourceUrl = new Uri("https://example.com/jsonld-array-graph");
+        const string html = """
+            <html>
+              <body>
+                <script type="application/ld+json">
+                [
+                  {
+                    "@context": "https://schema.org",
+                    "@type": "WebPage",
+                    "name": "Buffalo Wings"
+                  },
+                  {
+                    "@context": "https://schema.org",
+                    "@type": "Recipe",
+                    "name": "Best Buffalo Wings",
+                    "description": "Oven baked wings with buffalo sauce.",
+                    "recipeCategory": "Dinner",
+                    "recipeIngredient": ["2 lb wings", "1/2 cup hot sauce"],
+                    "recipeInstructions": [
+                      { "@type": "HowToStep", "text": "Bake wings until crisp." },
+                      { "@type": "HowToStep", "text": "Toss with sauce." }
+                    ]
+                  }
+                ]
+                </script>
+              </body>
+            </html>
+            """;
+
+        var draft = RecipeImportService.ParseImportedRecipeDraft(sourceUrl, html);
+
+        draft.Name.Should().Be("Best Buffalo Wings");
+        draft.Category.Should().Be("dinner");
+        draft.Ingredients.Select(i => i.Name).Should().Contain(["2 lb wings", "1/2 cup hot sauce"]);
+        draft.Instructions.Should().ContainInOrder("Bake wings until crisp.", "Toss with sauce.");
+    }
+
+    [Fact]
     public async Task ParseImportedRecipeDraftAsync_WhenJsonLdMissing_UsesAiFallbackWhenConfigured()
     {
         const string openAiResponse = """

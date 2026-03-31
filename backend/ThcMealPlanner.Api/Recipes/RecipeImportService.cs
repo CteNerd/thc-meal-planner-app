@@ -597,6 +597,11 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
     private static bool IsRecipeType(JsonElement element)
     {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
         if (!element.TryGetProperty("@type", out var typeElement))
         {
             return false;
@@ -727,6 +732,11 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
     private static string? GetFirstStringLike(JsonElement element, string propertyName)
     {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
         if (!element.TryGetProperty(propertyName, out var property))
         {
             return null;
@@ -737,6 +747,11 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
     private static List<string> GetStringListLike(JsonElement element, string propertyName)
     {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return [];
+        }
+
         if (!element.TryGetProperty(propertyName, out var property))
         {
             return [];
@@ -847,6 +862,11 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
     private static string? GetString(JsonElement element, string propertyName)
     {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
         if (!element.TryGetProperty(propertyName, out var property))
         {
             return null;
