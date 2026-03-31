@@ -27,11 +27,6 @@ public sealed partial class RecipeImportService : IRecipeImportService
     private readonly OpenAiOptions _openAiOptions;
     private readonly ILogger<RecipeImportService>? _logger;
 
-    public RecipeImportService(HttpClient httpClient)
-        : this(httpClient, null, null, null)
-    {
-    }
-
     public RecipeImportService(
         HttpClient httpClient,
         IOpenAiApiKeyProvider? apiKeyProvider,

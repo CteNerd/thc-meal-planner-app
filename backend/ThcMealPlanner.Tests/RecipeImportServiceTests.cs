@@ -97,7 +97,11 @@ public sealed class RecipeImportServiceTests
         {
             BaseAddress = new Uri("https://example.com")
         };
-        var service = new RecipeImportService(httpClient);
+        var service = new RecipeImportService(
+          httpClient,
+          null,
+          null,
+          NullLogger<RecipeImportService>.Instance);
 
         var act = async () => await service.ImportFromUrlAsync("http://localhost/recipe", CancellationToken.None);
 

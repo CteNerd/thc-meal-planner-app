@@ -56,6 +56,8 @@ store mappings, and migration payloads.
 - Keep change sets small, test-backed, and reversible.
 - Follow the active repository workflow in milestone/checklist docs (currently direct-to-main with frequent checkpoints).
 - Prefer explicit assumptions and call out unresolved ambiguity.
+- For any DI-activated service (AddScoped/AddSingleton/AddTransient/AddHttpClient), keep exactly one public constructor unless constructor selection is explicitly disambiguated.
+- When adding optional dependencies to DI services, prefer nullable parameters on the single constructor over introducing overloaded public constructors.
 - For destructive actions, require confirmation in UI and service layers.
 - Keep API contracts stable and document intentional breaking changes.
 - Run automated deployed validation checks before handing off manual validation items; record automated evidence in living phase checklists.
