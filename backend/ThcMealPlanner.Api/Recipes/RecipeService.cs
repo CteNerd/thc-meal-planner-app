@@ -31,6 +31,8 @@ public interface IRecipeService
 
 public sealed class RecipeService : IRecipeService
 {
+    private const string DefaultCuisine = "unspecified";
+
     private readonly IDynamoDbRepository<RecipeDocument> _recipeRepository;
     private readonly IDynamoDbRepository<FavoriteRecipeDocument> _favoriteRepository;
 
@@ -80,7 +82,7 @@ public sealed class RecipeService : IRecipeService
             Name = request.Name,
             Description = request.Description,
             Category = request.Category,
-            Cuisine = request.Cuisine,
+            Cuisine = NormalizeCuisine(request.Cuisine),
             Servings = request.Servings,
             PrepTimeMinutes = request.PrepTimeMinutes,
             CookTimeMinutes = request.CookTimeMinutes,
@@ -126,7 +128,7 @@ public sealed class RecipeService : IRecipeService
             Name = request.Name ?? existing.Name,
             Description = request.Description ?? existing.Description,
             Category = request.Category ?? existing.Category,
-            Cuisine = request.Cuisine ?? existing.Cuisine,
+            Cuisine = NormalizeCuisine(request.Cuisine ?? existing.Cuisine),
             Servings = request.Servings ?? existing.Servings,
             PrepTimeMinutes = request.PrepTimeMinutes ?? existing.PrepTimeMinutes,
             CookTimeMinutes = request.CookTimeMinutes ?? existing.CookTimeMinutes,
@@ -221,5 +223,10 @@ public sealed class RecipeService : IRecipeService
     private static DynamoDbKey ToFavoriteKey(string userId, string recipeId)
     {
         return new DynamoDbKey($"USER#{userId}", $"FAV#{recipeId}");
+    }
+
+    private static string NormalizeCuisine(string? cuisine)
+    {
+        return string.IsNullOrWhiteSpace(cuisine) ? DefaultCuisine : cuisine.Trim();
     }
 }
