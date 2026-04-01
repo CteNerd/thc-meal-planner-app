@@ -300,12 +300,12 @@ export function RecipeEditorPage() {
 
             <section className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-slate-700">
-                Name *
+                <span>Name <span className="text-red-600">*</span></span>
                 <Input required hasError={hasFieldError(validationErrors, 'name')} value={form.name} onChange={(event) => updateField(setForm, 'name', event.target.value)} aria-label="Recipe name" placeholder="Family Taco Bowls" />
                 {fieldErrorMessage(validationErrors, 'name')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
-                Category *
+                <span>Category <span className="text-red-600">*</span></span>
                 <select required value={form.category} onChange={(event) => updateField(setForm, 'category', event.target.value)} aria-label="Recipe category" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'category') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
                   <option value="breakfast">breakfast</option>
                   <option value="lunch">lunch</option>
@@ -322,11 +322,13 @@ export function RecipeEditorPage() {
                 Cuisine
                 <Input hasError={hasFieldError(validationErrors, 'cuisine')} value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" placeholder="Mexican" />
                 {fieldErrorMessage(validationErrors, 'cuisine')}
+                <p className="text-xs text-slate-500">Examples: Mexican, Italian, Asian, Mediterranean</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Tags
                 <Input hasError={hasFieldError(validationErrors, 'tags')} value={form.tags} onChange={(event) => updateField(setForm, 'tags', event.target.value)} aria-label="Recipe tags" placeholder="kid-friendly, quick" />
                 {fieldErrorMessage(validationErrors, 'tags')}
+                <p className="text-xs text-slate-500">Comma-separated. Example: kid-friendly, gluten-free, 30-minute</p>
               </label>
             </section>
 
@@ -348,18 +350,21 @@ export function RecipeEditorPage() {
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Protein source
-                <Input hasError={hasFieldError(validationErrors, 'proteinSource')} value={form.proteinSource} onChange={(event) => updateField(setForm, 'proteinSource', event.target.value)} aria-label="Recipe protein source" />
+                <Input hasError={hasFieldError(validationErrors, 'proteinSource')} value={form.proteinSource} onChange={(event) => updateField(setForm, 'proteinSource', event.target.value)} aria-label="Recipe protein source" placeholder="chicken, beef" />
                 {fieldErrorMessage(validationErrors, 'proteinSource')}
+                <p className="text-xs text-slate-500">Comma-separated. Example: chicken, sausage, shrimp</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cooking method
-                <Input hasError={hasFieldError(validationErrors, 'cookingMethod')} value={form.cookingMethod} onChange={(event) => updateField(setForm, 'cookingMethod', event.target.value)} aria-label="Recipe cooking method" />
+                <Input hasError={hasFieldError(validationErrors, 'cookingMethod')} value={form.cookingMethod} onChange={(event) => updateField(setForm, 'cookingMethod', event.target.value)} aria-label="Recipe cooking method" placeholder="braising, grilling" />
                 {fieldErrorMessage(validationErrors, 'cookingMethod')}
+                <p className="text-xs text-slate-500">Comma-separated. Example: braising, simmering, stovetop</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Difficulty
-                <Input hasError={hasFieldError(validationErrors, 'difficulty')} value={form.difficulty} onChange={(event) => updateField(setForm, 'difficulty', event.target.value)} aria-label="Recipe difficulty" />
+                <Input hasError={hasFieldError(validationErrors, 'difficulty')} value={form.difficulty} onChange={(event) => updateField(setForm, 'difficulty', event.target.value)} aria-label="Recipe difficulty" placeholder="easy, medium, hard" />
                 {fieldErrorMessage(validationErrors, 'difficulty')}
+                <p className="text-xs text-slate-500">Example: easy, medium, hard</p>
               </label>
             </section>
 
@@ -417,7 +422,7 @@ export function RecipeEditorPage() {
               </label>
             </section>
 
-            <p className="text-xs text-slate-500">Fields marked with * are required. Other fields are optional and can be added later.</p>
+            <p className="text-xs text-slate-500">Fields marked with <span className="text-red-600">*</span> are required. Other fields are optional and can be added later.</p>
 
             <div className="flex flex-wrap justify-end gap-3">
               <Link to={isEditMode && recipeId ? `/cookbook/${recipeId}` : '/cookbook'}>
