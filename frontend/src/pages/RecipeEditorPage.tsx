@@ -13,6 +13,7 @@ import {
   updateRecipe,
   uploadRecipeImage
 } from '../services/recipeApi';
+import { mapImportedValuesToOptions } from '../utils/recipeImportMapper';
 import {
   CUISINE_OPTIONS,
   COOKING_METHOD_OPTIONS,
@@ -131,18 +132,30 @@ export function RecipeEditorPage() {
       setIsSaving(true);
       setError(null);
       const draft = await importRecipeFromUrl({ url: importUrl.trim() });
+      
+      // Map imported values to predefined dropdown options (with rounding for times)
+      const mapped = mapImportedValuesToOptions({
+        cuisine: draft.cuisine,
+        servings: draft.servings,
+        prepTimeMinutes: draft.prepTimeMinutes,
+        cookTimeMinutes: draft.cookTimeMinutes,
+        proteinSource: draft.proteinSource,
+        cookingMethod: draft.cookingMethod,
+        difficulty: draft.difficulty
+      });
+
       setForm((current) => ({
         ...current,
         name: draft.name,
         description: draft.description ?? '',
         category: draft.category,
-        cuisine: draft.cuisine ?? '',
-        servings: draft.servings?.toString() ?? '',
-        prepTimeMinutes: draft.prepTimeMinutes?.toString() ?? '',
-        cookTimeMinutes: draft.cookTimeMinutes?.toString() ?? '',
-        proteinSource: draft.proteinSource ?? [],
-        cookingMethod: draft.cookingMethod ?? [],
-        difficulty: draft.difficulty ?? '',
+        cuisine: mapped.cuisine,
+        servings: mapped.servings,
+        prepTimeMinutes: mapped.prepTimeMinutes,
+        cookTimeMinutes: mapped.cookTimeMinutes,
+        proteinSource: mapped.proteinSource,
+        cookingMethod: mapped.cookingMethod,
+        difficulty: mapped.difficulty,
         tags: draft.tags,
         ingredients: formatIngredients(draft.ingredients),
         instructions: draft.instructions.join('\n'),
