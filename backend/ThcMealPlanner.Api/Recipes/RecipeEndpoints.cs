@@ -159,8 +159,12 @@ public static class RecipeEndpoints
         }
         catch (HttpRequestException exception)
         {
+            var statusCode = exception.StatusCode is null
+                ? StatusCodes.Status400BadRequest
+                : (int)exception.StatusCode.Value;
+
             return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
+                statusCode: statusCode,
                 title: "Image import failed",
                 detail: exception.Message);
         }

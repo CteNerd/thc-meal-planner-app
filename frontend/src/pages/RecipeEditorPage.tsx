@@ -76,6 +76,7 @@ export function RecipeEditorPage() {
   const [form, setForm] = useState<RecipeFormState>(emptyForm);
   const [importUrl, setImportUrl] = useState('');
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [imageImportWarnings, setImageImportWarnings] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,6 +133,7 @@ export function RecipeEditorPage() {
     try {
       setIsSaving(true);
       setError(null);
+      setImportWarnings([]);
       const draft = await importRecipeFromUrl({ url: importUrl.trim() });
 
       setForm((current) => ({
@@ -157,6 +159,7 @@ export function RecipeEditorPage() {
     try {
       setIsSaving(true);
       setError(null);
+      setImageImportWarnings([]);
       setValidationErrors({});
       const payload = toPayload(form);
       const savedRecipe = isEditMode && recipeId
@@ -241,9 +244,9 @@ export function RecipeEditorPage() {
           imageKey: upload.imageKey,
           sourceType: 'image_upload'
         });
-        setImportWarnings(draft.warnings);
+        setImageImportWarnings(draft.warnings);
       } catch (importErr) {
-        setImportWarnings([
+        setImageImportWarnings([
           getApiErrorMessage(
             importErr,
             'Image uploaded, but AI extraction could not parse details. You can edit manually or re-run extraction from the edit page.'
@@ -268,6 +271,7 @@ export function RecipeEditorPage() {
     try {
       setIsSaving(true);
       setError(null);
+      setImageImportWarnings([]);
       const draft = await importRecipeFromImage(recipeId, { imageKey: form.imageKey });
       const updated = await updateRecipe(recipeId, {
         ...toUpdatePayloadFromDraft(draft),
@@ -275,7 +279,7 @@ export function RecipeEditorPage() {
         sourceType: 'image_upload'
       });
       setForm(toFormState(updated));
-      setImportWarnings(draft.warnings);
+      setImageImportWarnings(draft.warnings);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to re-run AI extraction from the uploaded image.'));
     } finally {
@@ -329,6 +333,13 @@ export function RecipeEditorPage() {
                 Create draft from photo
               </Button>
             </div>
+            {imageImportWarnings.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-sm text-amber-800">
+                {imageImportWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
           </section>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
@@ -512,9 +523,9 @@ export function RecipeEditorPage() {
                   className="mt-3 max-h-72 w-full rounded-2xl object-contain bg-white p-2"
                   loading="lazy"
                 />
-                {importWarnings.length > 0 ? (
+                {imageImportWarnings.length > 0 ? (
                   <ul className="mt-3 space-y-1 text-sm text-amber-800">
-                    {importWarnings.map((warning) => (
+                    {imageImportWarnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>

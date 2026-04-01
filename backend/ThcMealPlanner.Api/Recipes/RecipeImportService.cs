@@ -18,7 +18,6 @@ public sealed partial class RecipeImportService : IRecipeImportService
 {
     private const int MaxResponseBytes = 1024 * 1024;
     private const int MaxAiInputCharacters = 24000;
-    private const string VisionModel = "gpt-4o";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -121,7 +120,7 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
         var payload = new
         {
-            model = VisionModel,
+            model = _openAiOptions.Model,
             temperature = 0.1,
             response_format = new { type = "json_object" },
             messages = new object[]
@@ -147,7 +146,7 @@ public sealed partial class RecipeImportService : IRecipeImportService
                             image_url = new
                             {
                                 url = imageUrl,
-                                detail = "high"
+                                detail = "auto"
                             }
                         }
                     }
@@ -155,17 +154,13 @@ public sealed partial class RecipeImportService : IRecipeImportService
             }
         };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_openAiOptions.BaseUrl.TrimEnd('/')}/chat/completions")
-        {
-            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
-        };
-
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        using var response = await SendOpenAiRequestWithRetryAsync(payload, apiKey, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"AI image extraction failed with status {(int)response.StatusCode}.");
+            throw new HttpRequestException(
+                $"AI image extraction failed with status {(int)response.StatusCode}.",
+                null,
+                response.StatusCode);
         }
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -187,6 +182,33 @@ public sealed partial class RecipeImportService : IRecipeImportService
         }
 
         return draft;
+    }
+
+    private async Task<HttpResponseMessage> SendOpenAiRequestWithRetryAsync(object payload, string apiKey, CancellationToken cancellationToken)
+    {
+        var endpoint = $"{_openAiOptions.BaseUrl.TrimEnd('/')}/chat/completions";
+
+        async Task<HttpResponseMessage> SendAsync()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            return await _httpClient.SendAsync(request, cancellationToken);
+        }
+
+        var firstResponse = await SendAsync();
+        if (firstResponse.StatusCode != HttpStatusCode.TooManyRequests)
+        {
+            return firstResponse;
+        }
+
+        firstResponse.Dispose();
+        _logger?.LogWarning("OpenAI image extraction hit rate limit (429). Retrying once.");
+        await Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken);
+
+        return await SendAsync();
     }
 
     internal async Task<ImportedRecipeDraft> ParseImportedRecipeDraftAsync(
