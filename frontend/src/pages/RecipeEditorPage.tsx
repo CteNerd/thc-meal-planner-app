@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { TagInput } from '../components/ui/TagInput';
 import { getApiErrorMessage, getApiValidationErrors } from '../services/api';
 import {
   createRecipe,
@@ -12,6 +13,13 @@ import {
   updateRecipe,
   uploadRecipeImage
 } from '../services/recipeApi';
+import {
+  CUISINE_OPTIONS,
+  COOKING_METHOD_OPTIONS,
+  DIFFICULTY_OPTIONS,
+  PROTEIN_SOURCE_OPTIONS,
+  TAG_SUGGESTIONS
+} from '../constants/recipeOptions';
 import type { Recipe, RecipeIngredient, RecipePayload } from '../types';
 
 type RecipeFormState = {
@@ -22,10 +30,10 @@ type RecipeFormState = {
   servings: string;
   prepTimeMinutes: string;
   cookTimeMinutes: string;
-  proteinSource: string;
-  cookingMethod: string;
+  proteinSource: string[];
+  cookingMethod: string[];
   difficulty: string;
-  tags: string;
+  tags: string[];
   ingredients: string;
   instructions: string;
   variations: string;
@@ -43,10 +51,10 @@ const emptyForm: RecipeFormState = {
   servings: '',
   prepTimeMinutes: '',
   cookTimeMinutes: '',
-  proteinSource: '',
-  cookingMethod: '',
+  proteinSource: [],
+  cookingMethod: [],
   difficulty: '',
-  tags: '',
+  tags: [],
   ingredients: '',
   instructions: '',
   variations: '',
@@ -129,10 +137,10 @@ export function RecipeEditorPage() {
         servings: draft.servings?.toString() ?? '',
         prepTimeMinutes: draft.prepTimeMinutes?.toString() ?? '',
         cookTimeMinutes: draft.cookTimeMinutes?.toString() ?? '',
-        proteinSource: (draft.proteinSource ?? []).join(', '),
-        cookingMethod: (draft.cookingMethod ?? []).join(', '),
+        proteinSource: draft.proteinSource ?? [],
+        cookingMethod: draft.cookingMethod ?? [],
         difficulty: draft.difficulty ?? '',
-        tags: draft.tags.join(', '),
+        tags: draft.tags,
         ingredients: formatIngredients(draft.ingredients),
         instructions: draft.instructions.join('\n'),
         sourceType: draft.sourceType,
@@ -320,15 +328,20 @@ export function RecipeEditorPage() {
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cuisine
-                <Input hasError={hasFieldError(validationErrors, 'cuisine')} value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" placeholder="Mexican" />
+                <select value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'cuisine') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
+                  <option value="">Select or enter custom cuisine</option>
+                  {CUISINE_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
                 {fieldErrorMessage(validationErrors, 'cuisine')}
-                <p className="text-xs text-slate-500">Examples: Mexican, Italian, Asian, Mediterranean</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Tags
-                <Input hasError={hasFieldError(validationErrors, 'tags')} value={form.tags} onChange={(event) => updateField(setForm, 'tags', event.target.value)} aria-label="Recipe tags" placeholder="kid-friendly, quick" />
+                <TagInput hasError={hasFieldError(validationErrors, 'tags')} values={form.tags} onChange={(tags) => setForm((c) => ({ ...c, tags }))} placeholder="Type a tag and press Enter" suggestions={TAG_SUGGESTIONS} />
                 {fieldErrorMessage(validationErrors, 'tags')}
-                <p className="text-xs text-slate-500">Comma-separated. Example: kid-friendly, gluten-free, 30-minute</p>
               </label>
             </section>
 
@@ -350,21 +363,25 @@ export function RecipeEditorPage() {
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Protein source
-                <Input hasError={hasFieldError(validationErrors, 'proteinSource')} value={form.proteinSource} onChange={(event) => updateField(setForm, 'proteinSource', event.target.value)} aria-label="Recipe protein source" placeholder="chicken, beef" />
+                <TagInput hasError={hasFieldError(validationErrors, 'proteinSource')} values={form.proteinSource} onChange={(sources) => setForm((c) => ({ ...c, proteinSource: sources }))} placeholder="Type a protein and press Enter" suggestions={PROTEIN_SOURCE_OPTIONS} />
                 {fieldErrorMessage(validationErrors, 'proteinSource')}
-                <p className="text-xs text-slate-500">Comma-separated. Example: chicken, sausage, shrimp</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cooking method
-                <Input hasError={hasFieldError(validationErrors, 'cookingMethod')} value={form.cookingMethod} onChange={(event) => updateField(setForm, 'cookingMethod', event.target.value)} aria-label="Recipe cooking method" placeholder="braising, grilling" />
+                <TagInput hasError={hasFieldError(validationErrors, 'cookingMethod')} values={form.cookingMethod} onChange={(methods) => setForm((c) => ({ ...c, cookingMethod: methods }))} placeholder="Type a method and press Enter" suggestions={COOKING_METHOD_OPTIONS} />
                 {fieldErrorMessage(validationErrors, 'cookingMethod')}
-                <p className="text-xs text-slate-500">Comma-separated. Example: braising, simmering, stovetop</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Difficulty
-                <Input hasError={hasFieldError(validationErrors, 'difficulty')} value={form.difficulty} onChange={(event) => updateField(setForm, 'difficulty', event.target.value)} aria-label="Recipe difficulty" placeholder="easy, medium, hard" />
+                <select value={form.difficulty} onChange={(event) => updateField(setForm, 'difficulty', event.target.value)} aria-label="Recipe difficulty" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'difficulty') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
+                  <option value="">Select difficulty level</option>
+                  {DIFFICULTY_OPTIONS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
                 {fieldErrorMessage(validationErrors, 'difficulty')}
-                <p className="text-xs text-slate-500">Example: easy, medium, hard</p>
               </label>
             </section>
 
@@ -472,10 +489,10 @@ function toFormState(recipe: Recipe): RecipeFormState {
     servings: recipe.servings?.toString() ?? '',
     prepTimeMinutes: recipe.prepTimeMinutes?.toString() ?? '',
     cookTimeMinutes: recipe.cookTimeMinutes?.toString() ?? '',
-    proteinSource: (recipe.proteinSource ?? []).join(', '),
-    cookingMethod: (recipe.cookingMethod ?? []).join(', '),
+    proteinSource: recipe.proteinSource ?? [],
+    cookingMethod: recipe.cookingMethod ?? [],
     difficulty: recipe.difficulty ?? '',
-    tags: recipe.tags.join(', '),
+    tags: recipe.tags,
     ingredients: formatIngredients(recipe.ingredients),
     instructions: recipe.instructions.join('\n'),
     variations: recipe.variations ?? '',
@@ -495,16 +512,10 @@ function toPayload(form: RecipeFormState): RecipePayload {
     servings: parseOptionalNumber(form.servings),
     prepTimeMinutes: parseOptionalNumber(form.prepTimeMinutes),
     cookTimeMinutes: parseOptionalNumber(form.cookTimeMinutes),
-    proteinSource: form.proteinSource
-      .split(',')
-      .map((protein) => protein.trim())
-      .filter(Boolean),
-    cookingMethod: form.cookingMethod
-      .split(',')
-      .map((method) => method.trim())
-      .filter(Boolean),
+    proteinSource: form.proteinSource,
+    cookingMethod: form.cookingMethod,
     difficulty: form.difficulty.trim(),
-    tags: form.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+    tags: form.tags,
     ingredients: parseIngredients(form.ingredients),
     instructions: parseInstructions(form.instructions),
     imageKey: form.imageKey.trim() || undefined,
