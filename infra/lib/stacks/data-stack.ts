@@ -73,10 +73,27 @@ export class DataStack extends Stack {
       })
     );
 
+    const uploadAllowedOrigins = props.deploymentConfig.domainName
+      ? [`https://${props.deploymentConfig.domainName}`]
+      : [];
+
+    if (props.deploymentConfig.name === 'dev') {
+      uploadAllowedOrigins.push('http://localhost:5173', 'http://127.0.0.1:5173');
+    }
+
     const recipeImagesBucket = new s3.Bucket(this, 'RecipeImagesBucket', {
       bucketName: `${prefix}-recipe-images`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true
+      enforceSSL: true,
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          allowedOrigins: uploadAllowedOrigins,
+          allowedHeaders: ['*'],
+          exposedHeaders: ['ETag'],
+          maxAge: 3600
+        }
+      ]
     });
 
     recipeImagesBucket.addToResourcePolicy(
