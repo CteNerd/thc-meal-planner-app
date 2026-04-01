@@ -477,6 +477,19 @@ export function RecipeEditorPage() {
               </label>
             </section>
 
+            {form.imageKey ? (
+              <section className="rounded-3xl bg-slate-50 p-5">
+                <h4 className="text-sm font-semibold text-slate-900">Uploaded photo</h4>
+                <p className="mt-1 text-xs text-slate-600">This image is attached to the current recipe draft.</p>
+                <img
+                  src={`/images/${form.imageKey}`}
+                  alt="Uploaded recipe"
+                  className="mt-3 max-h-72 w-full rounded-2xl object-contain bg-white p-2"
+                  loading="lazy"
+                />
+              </section>
+            ) : null}
+
             <p className="text-xs text-slate-500">Fields marked with <span className="text-red-600">*</span> are required. Other fields are optional and can be added later.</p>
 
             <div className="flex flex-wrap justify-end gap-3">
