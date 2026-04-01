@@ -261,7 +261,7 @@ public sealed class RecipeImportServiceTests
             Options.Create(new OpenAiOptions()),
             NullLogger<RecipeImportService>.Instance);
 
-        var draft = await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", CancellationToken.None);
+        var draft = await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", cancellationToken: CancellationToken.None);
 
         draft.Name.Should().Be("Cacciucco");
         draft.Description.Should().Be("Tuscan seafood stew");
@@ -275,6 +275,51 @@ public sealed class RecipeImportServiceTests
         draft.Instructions.Should().ContainInOrder("Saute aromatics.", "Add seafood and simmer.");
         draft.SourceType.Should().Be("image_upload");
         draft.Warnings.Should().Contain("AI vision extraction was used. Verify ingredients and steps before saving.");
+    }
+
+    [Fact]
+    public async Task ImportFromImageAsync_WhenAiReturns429_ThrowsHttpRequestExceptionWith429Status()
+    {
+        using var httpClient = new HttpClient(new TooManyRequestsHttpMessageHandler());
+        var service = new RecipeImportService(
+            httpClient,
+            null,
+            new StubApiKeyProvider("sk-test"),
+            Options.Create(new OpenAiOptions()),
+            NullLogger<RecipeImportService>.Instance);
+
+        var act = async () => await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", cancellationToken: CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>();
+        exception.Which.StatusCode.Should().Be(System.Net.HttpStatusCode.TooManyRequests);
+        exception.Which.Message.Should().Contain("rate limited");
+    }
+
+    [Fact]
+    public async Task ImportFromImageAsync_WhenPreferOcr_SkipsVisionAndUsesTextractPath()
+    {
+        // With null Textract and valid AI key, preferOcr=true should fail on OCR (not Vision)
+        using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler("{}"));
+        var service = new RecipeImportService(
+            httpClient,
+            null, // no Textract client
+            new StubApiKeyProvider("sk-test"),
+            Options.Create(new OpenAiOptions()),
+            NullLogger<RecipeImportService>.Instance);
+
+        var act = async () => await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", preferOcr: true, CancellationToken.None);
+
+        // Without Textract configured, OCR path throws immediately (no HTTP call to Vision made)
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*OCR extraction did not produce usable results*");
+    }
+
+    private sealed class TooManyRequestsHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests));
+        }
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

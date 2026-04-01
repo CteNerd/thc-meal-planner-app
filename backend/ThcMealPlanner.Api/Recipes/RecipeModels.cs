@@ -256,6 +256,12 @@ public sealed class ImportRecipeFromUrlRequest
 public sealed class ImportRecipeFromImageRequest
 {
     public string? ImageKey { get; init; }
+
+    /// <summary>
+    /// When true, skips AI vision and uses AWS Textract OCR directly.
+    /// Use when the AI vision service is rate-limited.
+    /// </summary>
+    public bool PreferOcr { get; init; }
 }
 
 public sealed class ImportedRecipeDraft

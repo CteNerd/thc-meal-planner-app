@@ -424,7 +424,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
             });
         }
 
-        public Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, CancellationToken cancellationToken = default)
+        public Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, bool preferOcr = false, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new ImportedRecipeDraft
             {

@@ -171,6 +171,8 @@ export type ImportRecipeFromUrlPayload = {
 
 export type ImportRecipeFromImagePayload = {
   imageKey?: string;
+  /** When true, skips AI vision and uses OCR (Textract). Set after a 429 rate-limit response. */
+  preferOcr?: boolean;
 };
 
 export type CreateRecipeUploadUrlPayload = {

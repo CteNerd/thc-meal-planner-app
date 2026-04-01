@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { TagInput } from '../components/ui/TagInput';
-import { getApiErrorMessage, getApiValidationErrors } from '../services/api';
+import { ApiError, getApiErrorMessage, getApiValidationErrors } from '../services/api';
 import {
   createRecipe,
   createRecipeUploadUrl,
@@ -79,6 +79,7 @@ export function RecipeEditorPage() {
   const [importUrl, setImportUrl] = useState('');
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [imageImportWarnings, setImageImportWarnings] = useState<string[]>([]);
+  const [imageImportRateLimited, setImageImportRateLimited] = useState<string | null>(null); // holds pending imageKey when 429 hit
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(isEditMode);
@@ -257,18 +258,51 @@ export function RecipeEditorPage() {
           sourceType: 'image_upload'
         });
         setImageImportWarnings(draft.warnings);
+        setImageImportRateLimited(null);
       } catch (importErr) {
-        setImageImportWarnings([
-          getApiErrorMessage(
-            importErr,
-            'Image uploaded, but AI extraction could not parse details. You can edit manually or re-run extraction from the edit page.'
-          )
-        ]);
+        if (importErr instanceof ApiError && importErr.status === 429) {
+          setImageImportRateLimited(upload.imageKey);
+          setImageImportWarnings([]);
+        } else {
+          setImageImportWarnings([
+            getApiErrorMessage(
+              importErr,
+              'Image uploaded, but AI extraction could not parse details. You can edit manually or re-run extraction from the edit page.'
+            )
+          ]);
+        }
       }
 
       navigate(`/cookbook/${extractedRecipe.recipeId}/edit`);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to create image draft recipe. Try a JPG/PNG/WEBP image under 10MB.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleOcrRetry(imageKey: string) {
+    const targetRecipeId = recipeId ?? imageImportRateLimited ? recipeId : null;
+    if (!targetRecipeId && !recipeId) {
+      setError('Cannot retry OCR: recipe is not saved yet.');
+      return;
+    }
+    const id = recipeId ?? '';
+    try {
+      setIsSaving(true);
+      setError(null);
+      setImageImportRateLimited(null);
+      setImageImportWarnings([]);
+      const draft = await importRecipeFromImage(id, { imageKey, preferOcr: true });
+      const updated = await updateRecipe(id, {
+        ...toUpdatePayloadFromDraft(draft),
+        imageKey,
+        sourceType: 'image_upload'
+      });
+      setForm(toFormState(updated));
+      setImageImportWarnings(draft.warnings);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'OCR extraction failed. You can edit the recipe manually.'));
     } finally {
       setIsSaving(false);
     }
@@ -284,6 +318,7 @@ export function RecipeEditorPage() {
       setIsSaving(true);
       setError(null);
       setImageImportWarnings([]);
+      setImageImportRateLimited(null);
       let activeImageKey = form.imageKey;
 
       if (selectedFile) {
@@ -301,7 +336,12 @@ export function RecipeEditorPage() {
       setSelectedFile(null);
       setImageImportWarnings(draft.warnings);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to re-run AI extraction from the uploaded image.'));
+      if (err instanceof ApiError && err.status === 429) {
+        setImageImportRateLimited(form.imageKey);
+        setImageImportWarnings([]);
+      } else {
+        setError(getApiErrorMessage(err, 'Unable to re-run AI extraction from the uploaded image.'));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -385,6 +425,17 @@ export function RecipeEditorPage() {
                   <li key={warning}>{warning}</li>
                 ))}
               </ul>
+            ) : null}
+            {imageImportRateLimited ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+                <p className="text-sm font-medium text-amber-900">AI Vision is temporarily rate limited</p>
+                <p className="text-xs text-amber-800">
+                  OpenAI returned a rate limit error. You can retry using AWS Textract OCR instead — OCR reads raw text from the image and may need more manual cleanup than AI Vision, but it does not have rate limits.
+                </p>
+                <Button type="button" onClick={() => void handleOcrRetry(imageImportRateLimited)} disabled={isSaving}>
+                  Retry with OCR (lower fidelity)
+                </Button>
+              </div>
             ) : null}
           </section>
 
@@ -585,6 +636,17 @@ export function RecipeEditorPage() {
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
+                ) : null}
+                {imageImportRateLimited ? (
+                  <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+                    <p className="text-sm font-medium text-amber-900">AI Vision is temporarily rate limited</p>
+                    <p className="text-xs text-amber-800">
+                      OpenAI returned a rate limit error. You can retry using AWS Textract OCR instead — OCR reads raw text from the image and may need more manual cleanup than AI Vision, but it does not have rate limits.
+                    </p>
+                    <Button type="button" onClick={() => void handleOcrRetry(imageImportRateLimited)} disabled={isSaving}>
+                      Retry with OCR (lower fidelity)
+                    </Button>
+                  </div>
                 ) : null}
               </section>
             ) : null}

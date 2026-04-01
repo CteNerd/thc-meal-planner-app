@@ -147,7 +147,7 @@ public static class RecipeEndpoints
         try
         {
             var readUrl = recipeImageUploadService.CreateReadUrl(imageKey);
-            var draft = await recipeImportService.ImportFromImageAsync(readUrl, cancellationToken);
+            var draft = await recipeImportService.ImportFromImageAsync(readUrl, request.PreferOcr, cancellationToken);
             return Results.Ok(draft);
         }
         catch (InvalidOperationException exception)

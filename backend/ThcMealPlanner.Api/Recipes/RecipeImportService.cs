@@ -13,7 +13,7 @@ namespace ThcMealPlanner.Api.Recipes;
 public interface IRecipeImportService
 {
     Task<ImportedRecipeDraft> ImportFromUrlAsync(string url, CancellationToken cancellationToken = default);
-    Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, CancellationToken cancellationToken = default);
+    Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, bool preferOcr = false, CancellationToken cancellationToken = default);
 }
 
 public sealed partial class RecipeImportService : IRecipeImportService
@@ -106,22 +106,31 @@ public sealed partial class RecipeImportService : IRecipeImportService
         }
     }
 
-    public async Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, CancellationToken cancellationToken = default)
+    public async Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, bool preferOcr = false, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(imageUrl))
         {
             throw new InvalidOperationException("Image URL is required.");
         }
 
-        var textractDraft = await TryParseTextractDraftAsync(imageUrl, cancellationToken);
-        if (textractDraft is not null)
+        // When OCR is explicitly preferred (e.g. user retrying after a vision rate limit), go straight to Textract.
+        if (preferOcr)
         {
-            return textractDraft;
+            var ocrDraft = await TryParseTextractDraftAsync(imageUrl, cancellationToken);
+            if (ocrDraft is not null)
+            {
+                return ocrDraft;
+            }
+
+            throw new InvalidOperationException("AWS Textract OCR extraction did not produce usable results for this image.");
         }
 
+        // Default path: AI vision first, Textract as fallback if vision is unavailable.
         if (_apiKeyProvider is null)
         {
-            throw new InvalidOperationException("AI image extraction is not configured.");
+            _logger?.LogWarning("AI vision is not configured; falling back to Textract OCR.");
+            var ocrFallback = await TryParseTextractDraftAsync(imageUrl, cancellationToken);
+            return ocrFallback ?? throw new InvalidOperationException("Neither AI vision nor OCR extraction is configured.");
         }
 
         var apiKey = await _apiKeyProvider.GetApiKeyAsync(cancellationToken);
@@ -166,11 +175,15 @@ public sealed partial class RecipeImportService : IRecipeImportService
             }
         };
 
-        using var response = await SendOpenAiRequestWithRetryAsync(payload, apiKey, cancellationToken);
+        using var response = await SendOpenAiRequestAsync(payload, apiKey, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            // Propagate the HTTP status (including 429) so callers can distinguish rate limiting
+            // from other failures. The frontend detects 429 and offers a user-initiated OCR retry.
             throw new HttpRequestException(
-                $"AI image extraction failed with status {(int)response.StatusCode}.",
+                response.StatusCode == HttpStatusCode.TooManyRequests
+                    ? "AI vision is temporarily rate limited. Use OCR to extract the recipe instead."
+                    : $"AI image extraction failed with status {(int)response.StatusCode}.",
                 null,
                 response.StatusCode);
         }
@@ -292,31 +305,16 @@ public sealed partial class RecipeImportService : IRecipeImportService
         return memory.ToArray();
     }
 
-    private async Task<HttpResponseMessage> SendOpenAiRequestWithRetryAsync(object payload, string apiKey, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendOpenAiRequestAsync(object payload, string apiKey, CancellationToken cancellationToken)
     {
         var endpoint = $"{_openAiOptions.BaseUrl.TrimEnd('/')}/chat/completions";
 
-        async Task<HttpResponseMessage> SendAsync()
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-            {
-                Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
-            };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            return await _httpClient.SendAsync(request, cancellationToken);
-        }
-
-        var firstResponse = await SendAsync();
-        if (firstResponse.StatusCode != HttpStatusCode.TooManyRequests)
-        {
-            return firstResponse;
-        }
-
-        firstResponse.Dispose();
-        _logger?.LogWarning("OpenAI image extraction hit rate limit (429). Retrying once.");
-        await Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken);
-
-        return await SendAsync();
+            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        return await _httpClient.SendAsync(request, cancellationToken);
     }
 
     internal async Task<ImportedRecipeDraft> ParseImportedRecipeDraftAsync(
