@@ -7,6 +7,7 @@ import type { ImportedRecipeDraft, Recipe } from '../types';
 import {
   createRecipe,
   createRecipeUploadUrl,
+  deleteRecipe,
   getRecipe,
   importRecipeFromImage,
   importRecipeFromUrl,
@@ -17,6 +18,7 @@ import {
 vi.mock('../services/recipeApi', () => ({
   createRecipe: vi.fn(),
   createRecipeUploadUrl: vi.fn(),
+  deleteRecipe: vi.fn(),
   getRecipe: vi.fn(),
   importRecipeFromImage: vi.fn(),
   importRecipeFromUrl: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock('../services/recipeApi', () => ({
 
 const mockedCreateRecipe = vi.mocked(createRecipe);
 const mockedCreateRecipeUploadUrl = vi.mocked(createRecipeUploadUrl);
+const mockedDeleteRecipe = vi.mocked(deleteRecipe);
 const mockedGetRecipe = vi.mocked(getRecipe);
 const mockedImportRecipeFromImage = vi.mocked(importRecipeFromImage);
 const mockedImportRecipeFromUrl = vi.mocked(importRecipeFromUrl);
@@ -79,6 +82,7 @@ describe('RecipeEditorPage', () => {
     vi.resetAllMocks();
     mockedCreateRecipe.mockResolvedValue(buildRecipe());
     mockedUpdateRecipe.mockResolvedValue(buildRecipe());
+    mockedDeleteRecipe.mockResolvedValue();
     mockedImportRecipeFromImage.mockResolvedValue(buildDraft({ sourceType: 'image_upload', sourceUrl: 'https://example.com/recipes/rec_1/main.jpg' }));
     mockedCreateRecipeUploadUrl.mockResolvedValue({
       uploadUrl: 'https://example.com/upload',
@@ -132,6 +136,51 @@ describe('RecipeEditorPage', () => {
     expect(await screen.findByDisplayValue('Editable Recipe')).toBeInTheDocument();
   });
 
+  it('creates separate draft recipes for up to three uploaded images', async () => {
+    mockedCreateRecipe
+      .mockResolvedValueOnce(buildRecipe({ recipeId: 'rec_1' }))
+      .mockResolvedValueOnce(buildRecipe({ recipeId: 'rec_2' }));
+    mockedCreateRecipeUploadUrl
+      .mockResolvedValueOnce({
+        uploadUrl: 'https://example.com/upload-1',
+        imageKey: 'recipes/rec_1/main.jpg',
+        imageUrl: 'https://example.com/recipes/rec_1/main.jpg'
+      })
+      .mockResolvedValueOnce({
+        uploadUrl: 'https://example.com/upload-2',
+        imageKey: 'recipes/rec_2/main.jpg',
+        imageUrl: 'https://example.com/recipes/rec_2/main.jpg'
+      });
+    mockedUpdateRecipe
+      .mockResolvedValueOnce(buildRecipe({ recipeId: 'rec_1', imageKey: 'recipes/rec_1/main.jpg', sourceType: 'image_upload' }))
+      .mockResolvedValueOnce(buildRecipe({ recipeId: 'rec_1', name: 'Imported Pasta 1', imageKey: 'recipes/rec_1/main.jpg', sourceType: 'image_upload' }))
+      .mockResolvedValueOnce(buildRecipe({ recipeId: 'rec_2', imageKey: 'recipes/rec_2/main.jpg', sourceType: 'image_upload' }))
+      .mockResolvedValueOnce(buildRecipe({ recipeId: 'rec_2', name: 'Imported Pasta 2', imageKey: 'recipes/rec_2/main.jpg', sourceType: 'image_upload' }));
+    mockedImportRecipeFromImage
+      .mockResolvedValueOnce(buildDraft({ name: 'Imported Pasta 1', sourceType: 'image_upload', sourceUrl: 'https://example.com/recipes/rec_1/main.jpg' }))
+      .mockResolvedValueOnce(buildDraft({ name: 'Imported Pasta 2', sourceType: 'image_upload', sourceUrl: 'https://example.com/recipes/rec_2/main.jpg' }));
+
+    renderRecipeEditorPage();
+
+    const fileOne = new File(['first'], 'first.jpg', { type: 'image/jpeg' });
+    const fileTwo = new File(['second'], 'second.jpg', { type: 'image/jpeg' });
+
+    fireEvent.change(screen.getByLabelText('Recipe image files'), {
+      target: { files: [fileOne, fileTwo] }
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create drafts from photos' }));
+
+    await waitFor(() => {
+      expect(mockedCreateRecipe).toHaveBeenCalledTimes(2);
+      expect(mockedUploadRecipeImage).toHaveBeenCalledTimes(2);
+      expect(mockedImportRecipeFromImage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText('Draft: Imported Pasta 1')).toBeInTheDocument();
+    expect(screen.getByText('Draft: Imported Pasta 2')).toBeInTheDocument();
+  });
+
   it('uploads a replacement image before re-running extraction in edit mode', async () => {
     mockedGetRecipe.mockResolvedValue(buildRecipe({
       recipeId: 'rec_edit',
@@ -166,7 +215,7 @@ describe('RecipeEditorPage', () => {
     await screen.findByDisplayValue('Editable Recipe');
 
     const file = new File(['replacement'], 'replacement.jpg', { type: 'image/jpeg' });
-    fireEvent.change(screen.getAllByLabelText('Recipe image file')[1], {
+    fireEvent.change(screen.getByLabelText('Recipe image file'), {
       target: { files: [file] }
     });
 

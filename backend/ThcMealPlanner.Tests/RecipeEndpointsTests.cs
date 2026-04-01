@@ -337,6 +337,43 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
+    public async Task PostImportFromImage_WhenHourlyLimitExceeded_ReturnsTooManyRequestsProblemDetails()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#test-family", "RECIPE#rec_img_limit"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_img_limit",
+                FamilyId = "FAM#test-family",
+                Name = "Image Recipe",
+                Category = "dinner",
+                Cuisine = "unspecified",
+                ImageKey = "recipes/rec_img_limit/test.jpg",
+                Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "test-user-123",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(
+            recipeRepository,
+            favoriteRepository,
+            new FakeRecipeImageImportQuotaService(allowImports: false));
+
+        var response = await client.PostAsJsonAsync(
+            "/api/recipes/rec_img_limit/import-from-image",
+            new ImportRecipeFromImageRequest());
+
+        response.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+        problem.Should().NotBeNull();
+        problem!.Title.Should().Be("Image import limit reached");
+    }
+
+    [Fact]
     public async Task GetRecipes_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
     {
         var recipeRepository = new InMemoryRecipeRepository();
@@ -355,7 +392,8 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
 
     private HttpClient CreateAuthenticatedClient(
         InMemoryRecipeRepository recipeRepository,
-        InMemoryFavoriteRepository favoriteRepository)
+        InMemoryFavoriteRepository favoriteRepository,
+        IRecipeImageImportQuotaService? recipeImageImportQuotaService = null)
     {
         return _factory.WithWebHostBuilder(builder =>
         {
@@ -371,6 +409,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
                 services.AddScoped<IRecipeImportService, FakeRecipeImportService>();
                 services.AddScoped<IRecipeImageUploadService, FakeRecipeImageUploadService>();
+                services.AddScoped<IRecipeImageImportQuotaService>(_ => recipeImageImportQuotaService ?? new FakeRecipeImageImportQuotaService());
                 services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
                 services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
                 services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
@@ -399,6 +438,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
                 services.AddScoped<IRecipeImportService, FakeRecipeImportService>();
                 services.AddScoped<IRecipeImageUploadService, FakeRecipeImageUploadService>();
+                services.AddScoped<IRecipeImageImportQuotaService, FakeRecipeImageImportQuotaService>();
                 services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestValidator>();
                 services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
                 services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
@@ -456,6 +496,21 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
         public string CreateReadUrl(string imageKey, TimeSpan? expiresIn = null)
         {
             return $"https://example.com/{imageKey}";
+        }
+    }
+
+    private sealed class FakeRecipeImageImportQuotaService : IRecipeImageImportQuotaService
+    {
+        private readonly bool _allowImports;
+
+        public FakeRecipeImageImportQuotaService(bool allowImports = true)
+        {
+            _allowImports = allowImports;
+        }
+
+        public Task<bool> TryReserveImportAsync(string familyId, string userId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_allowImports);
         }
     }
 

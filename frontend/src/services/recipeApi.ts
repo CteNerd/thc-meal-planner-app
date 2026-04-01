@@ -73,7 +73,7 @@ export async function uploadRecipeImage(uploadUrl: string, file: File): Promise<
 
     throw new Error(
       `Image upload failed (${response.status} ${response.statusText}). ` +
-      'Please retry with a JPG/PNG/WEBP image under 10MB.' +
+      'Please retry with a JPG/PNG/WEBP image under 5MB.' +
       bodyHint
     );
   }

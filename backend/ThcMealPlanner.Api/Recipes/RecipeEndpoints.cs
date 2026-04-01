@@ -111,6 +111,7 @@ public static class RecipeEndpoints
         IValidator<ImportRecipeFromImageRequest> validator,
         IRecipeService recipeService,
         IRecipeImageUploadService recipeImageUploadService,
+        IRecipeImageImportQuotaService recipeImageImportQuotaService,
         IRecipeImportService recipeImportService,
         CancellationToken cancellationToken)
     {
@@ -142,6 +143,19 @@ public static class RecipeEndpoints
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Image import failed",
                 detail: "Recipe image is missing. Upload a recipe image first.");
+        }
+
+        var quotaReserved = await recipeImageImportQuotaService.TryReserveImportAsync(
+            userContext.FamilyId,
+            userContext.Sub,
+            cancellationToken);
+
+        if (!quotaReserved)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status429TooManyRequests,
+                title: "Image import limit reached",
+                detail: "You can process up to 20 recipe images per hour. Try again after the current hourly window resets.");
         }
 
         try

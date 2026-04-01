@@ -8,6 +8,7 @@ import { ApiError, getApiErrorMessage, getApiValidationErrors } from '../service
 import {
   createRecipe,
   createRecipeUploadUrl,
+  deleteRecipe,
   getRecipe,
   importRecipeFromImage,
   importRecipeFromUrl,
@@ -49,6 +50,26 @@ type RecipeFormState = {
   imageUrl: string;
 };
 
+type BatchImportStatus = 'queued' | 'uploading' | 'extracting' | 'created' | 'needs_ocr' | 'quota_exceeded' | 'failed';
+
+type BatchImportItem = {
+  id: string;
+  file?: File;
+  fileName: string;
+  sizeBytes: number;
+  status: BatchImportStatus;
+  recipeId?: string;
+  recipeName?: string;
+  imageKey?: string;
+  warnings?: string[];
+  error?: string;
+};
+
+const maxCreateBatchFiles = 3;
+const maxImageBytes = 5 * 1024 * 1024;
+const maxCreateBatchBytes = 15 * 1024 * 1024;
+const supportedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 const emptyForm: RecipeFormState = {
   name: '',
   description: '',
@@ -79,7 +100,8 @@ export function RecipeEditorPage() {
   const [importUrl, setImportUrl] = useState('');
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [imageImportWarnings, setImageImportWarnings] = useState<string[]>([]);
-  const [imageImportRateLimited, setImageImportRateLimited] = useState<string | null>(null); // holds pending imageKey when 429 hit
+  const [imageImportRateLimited, setImageImportRateLimited] = useState<string | null>(null);
+  const [batchItems, setBatchItems] = useState<BatchImportItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(isEditMode);
@@ -144,6 +166,47 @@ export function RecipeEditorPage() {
 
   const displayedImageUrl = selectedFilePreviewUrl ?? form.imageUrl;
 
+  function updateBatchItem(itemId: string, patch: Partial<BatchImportItem>) {
+    setBatchItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...patch } : item)));
+  }
+
+  function handleCreateFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    const validationMessage = validateCreateBatchFiles(files);
+
+    setImageImportWarnings([]);
+    setImageImportRateLimited(null);
+
+    if (validationMessage) {
+      setBatchItems([]);
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+
+    setError(null);
+    setBatchItems(files.map((file, index) => createBatchItem(file, index)));
+  }
+
+  function handleEditFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const nextFile = event.target.files?.[0] ?? null;
+    if (!nextFile) {
+      setSelectedFile(null);
+      return;
+    }
+
+    const validationMessage = validateSingleImageFile(nextFile);
+    if (validationMessage) {
+      setSelectedFile(null);
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+
+    setError(null);
+    setSelectedFile(nextFile);
+  }
+
   async function handleImport() {
     if (!importUrl.trim()) {
       setError('Recipe URL is required for import.');
@@ -203,98 +266,197 @@ export function RecipeEditorPage() {
     }
   }
 
-  async function handleCreateImageDraft() {
+  async function handleCreateImageDrafts() {
     if (isEditMode) {
       setError('Image-first draft is only available when creating a new recipe.');
       return;
     }
 
-    if (!selectedFile) {
-      setError('Choose a recipe photo first.');
+    if (batchItems.length === 0) {
+      setError('Choose up to three recipe photos first.');
       return;
     }
 
     try {
       setIsSaving(true);
       setError(null);
+      setImageImportWarnings([]);
+      setImageImportRateLimited(null);
 
-      const draftName = selectedFile.name.replace(/\.[^/.]+$/, '').trim();
-      const baseRecipe = await createRecipe({
-        name: draftName.length > 0 ? draftName : `Photo recipe draft ${new Date().toISOString().slice(0, 10)}`,
-        category: 'dinner',
-        cuisine: '',
-        description: 'Draft created from recipe image upload. Complete details after review.',
-        ingredients: [
-          {
-            name: 'Review uploaded image and add ingredients',
-            quantity: undefined,
-            unit: undefined,
-            section: undefined,
-            notes: undefined
+      let quotaExceeded = false;
+
+      for (const item of batchItems) {
+        if (quotaExceeded) {
+          updateBatchItem(item.id, {
+            status: 'quota_exceeded',
+            error: 'Hourly image import limit reached before this file could be processed.'
+          });
+          continue;
+        }
+
+        if (!item.file) {
+          continue;
+        }
+
+        let baseRecipe: Recipe | null = null;
+        let uploadedImageKey: string | undefined;
+        let imageAttached = false;
+
+        updateBatchItem(item.id, { status: 'uploading', error: undefined, warnings: [] });
+
+        try {
+          const draftName = item.file.name.replace(/\.[^/.]+$/, '').trim();
+          baseRecipe = await createRecipe({
+            name: draftName.length > 0 ? draftName : `Photo recipe draft ${new Date().toISOString().slice(0, 10)}`,
+            category: 'dinner',
+            cuisine: '',
+            description: 'Draft created from recipe image upload. Complete details after review.',
+            ingredients: [
+              {
+                name: 'Review uploaded image and add ingredients',
+                quantity: undefined,
+                unit: undefined,
+                section: undefined,
+                notes: undefined
+              }
+            ],
+            instructions: ['Review uploaded image and add preparation steps.'],
+            tags: ['draft'],
+            sourceType: 'image_upload'
+          });
+
+          const upload = await createRecipeUploadUrl(baseRecipe.recipeId, {
+            fileName: item.file.name,
+            contentType: item.file.type
+          });
+          uploadedImageKey = upload.imageKey;
+
+          await uploadRecipeImage(upload.uploadUrl, item.file);
+
+          await updateRecipe(baseRecipe.recipeId, {
+            imageKey: upload.imageKey,
+            sourceType: 'image_upload'
+          });
+          imageAttached = true;
+
+          updateBatchItem(item.id, {
+            status: 'extracting',
+            recipeId: baseRecipe.recipeId,
+            imageKey: upload.imageKey
+          });
+
+          const draft = await importRecipeFromImage(baseRecipe.recipeId, { imageKey: upload.imageKey });
+          const extractedRecipe = await updateRecipe(baseRecipe.recipeId, {
+            ...toUpdatePayloadFromDraft(draft),
+            imageKey: upload.imageKey,
+            sourceType: 'image_upload'
+          });
+
+          updateBatchItem(item.id, {
+            status: 'created',
+            recipeId: extractedRecipe.recipeId,
+            recipeName: extractedRecipe.name,
+            imageKey: upload.imageKey,
+            warnings: draft.warnings,
+            error: undefined
+          });
+        } catch (err) {
+          const message = getApiErrorMessage(err, 'Unable to create a draft recipe from this image.');
+
+          if (isVisionRateLimitError(err) && baseRecipe?.recipeId && uploadedImageKey) {
+            updateBatchItem(item.id, {
+              status: 'needs_ocr',
+              recipeId: baseRecipe.recipeId,
+              imageKey: uploadedImageKey,
+              error: message
+            });
+            continue;
           }
-        ],
-        instructions: ['Review uploaded image and add preparation steps.'],
-        tags: ['draft'],
-        sourceType: 'image_upload'
-      });
 
-      const upload = await createRecipeUploadUrl(baseRecipe.recipeId, {
-        fileName: selectedFile.name,
-        contentType: selectedFile.type
-      });
-      await uploadRecipeImage(upload.uploadUrl, selectedFile);
+          if (isImageQuotaExceededError(err)) {
+            quotaExceeded = true;
+            updateBatchItem(item.id, {
+              status: 'quota_exceeded',
+              recipeId: baseRecipe?.recipeId,
+              imageKey: uploadedImageKey,
+              error: message
+            });
+            continue;
+          }
 
-      const updated = await updateRecipe(baseRecipe.recipeId, {
-        imageKey: upload.imageKey,
-        sourceType: 'image_upload'
-      });
+          if (baseRecipe?.recipeId && !imageAttached) {
+            try {
+              await deleteRecipe(baseRecipe.recipeId);
+            } catch {
+              // Ignore cleanup failures and surface the original import error instead.
+            }
+          }
 
-      let extractedRecipe = updated;
-      try {
-        const draft = await importRecipeFromImage(baseRecipe.recipeId, { imageKey: upload.imageKey });
-        extractedRecipe = await updateRecipe(baseRecipe.recipeId, {
-          ...toUpdatePayloadFromDraft(draft),
-          imageKey: upload.imageKey,
-          sourceType: 'image_upload'
-        });
-        setImageImportWarnings(draft.warnings);
-        setImageImportRateLimited(null);
-      } catch (importErr) {
-        if (importErr instanceof ApiError && importErr.status === 429) {
-          setImageImportRateLimited(upload.imageKey);
-          setImageImportWarnings([]);
-        } else {
-          setImageImportWarnings([
-            getApiErrorMessage(
-              importErr,
-              'Image uploaded, but AI extraction could not parse details. You can edit manually or re-run extraction from the edit page.'
-            )
-          ]);
+          updateBatchItem(item.id, {
+            status: 'failed',
+            recipeId: baseRecipe?.recipeId,
+            imageKey: uploadedImageKey,
+            error: message
+          });
         }
       }
-
-      navigate(`/cookbook/${extractedRecipe.recipeId}/edit`);
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to create image draft recipe. Try a JPG/PNG/WEBP image under 10MB.'));
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleOcrRetry(imageKey: string) {
-    const targetRecipeId = recipeId ?? imageImportRateLimited ? recipeId : null;
-    if (!targetRecipeId && !recipeId) {
+  async function handleCreateBatchOcrRetry(itemId: string) {
+    const batchItem = batchItems.find((item) => item.id === itemId);
+    if (!batchItem?.recipeId || !batchItem.imageKey) {
+      setError('Cannot retry OCR for this image because the draft recipe is missing.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+      updateBatchItem(itemId, { status: 'extracting', error: undefined });
+
+      const draft = await importRecipeFromImage(batchItem.recipeId, {
+        imageKey: batchItem.imageKey,
+        preferOcr: true
+      });
+      const updated = await updateRecipe(batchItem.recipeId, {
+        ...toUpdatePayloadFromDraft(draft),
+        imageKey: batchItem.imageKey,
+        sourceType: 'image_upload'
+      });
+
+      updateBatchItem(itemId, {
+        status: 'created',
+        recipeId: updated.recipeId,
+        recipeName: updated.name,
+        warnings: draft.warnings,
+        error: undefined
+      });
+    } catch (err) {
+      updateBatchItem(itemId, {
+        status: isImageQuotaExceededError(err) ? 'quota_exceeded' : 'failed',
+        error: getApiErrorMessage(err, 'OCR extraction failed. You can open the draft recipe and edit it manually.')
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleEditOcrRetry(imageKey: string) {
+    if (!recipeId) {
       setError('Cannot retry OCR: recipe is not saved yet.');
       return;
     }
-    const id = recipeId ?? '';
+
     try {
       setIsSaving(true);
       setError(null);
       setImageImportRateLimited(null);
       setImageImportWarnings([]);
-      const draft = await importRecipeFromImage(id, { imageKey, preferOcr: true });
-      const updated = await updateRecipe(id, {
+      const draft = await importRecipeFromImage(recipeId, { imageKey, preferOcr: true });
+      const updated = await updateRecipe(recipeId, {
         ...toUpdatePayloadFromDraft(draft),
         imageKey,
         sourceType: 'image_upload'
@@ -314,12 +476,13 @@ export function RecipeEditorPage() {
       return;
     }
 
+    let activeImageKey = form.imageKey;
+
     try {
       setIsSaving(true);
       setError(null);
       setImageImportWarnings([]);
       setImageImportRateLimited(null);
-      let activeImageKey = form.imageKey;
 
       if (selectedFile) {
         const updatedRecipe = await uploadSelectedImage(recipeId, 'image_upload');
@@ -336,8 +499,8 @@ export function RecipeEditorPage() {
       setSelectedFile(null);
       setImageImportWarnings(draft.warnings);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 429) {
-        setImageImportRateLimited(form.imageKey);
+      if (isVisionRateLimitError(err)) {
+        setImageImportRateLimited(activeImageKey);
         setImageImportWarnings([]);
       } else {
         setError(getApiErrorMessage(err, 'Unable to re-run AI extraction from the uploaded image.'));
@@ -406,35 +569,54 @@ export function RecipeEditorPage() {
 
           <section className="rounded-3xl bg-slate-50 p-5">
             <h3 className="text-lg font-semibold text-slate-900">Quick capture from photo</h3>
-            <p className="mt-1 text-sm text-slate-600">Snap a recipe card or handwritten note, upload now, and complete details later.</p>
+            <p className="mt-1 text-sm text-slate-600">Snap recipe cards or screenshots, upload up to three at once, and create a separate draft recipe for each image.</p>
+            <p className="mt-2 text-xs text-slate-500">Limits: up to 3 images per batch, 5 MB per image, 15 MB total. Image processing is limited to 20 images per hour per user.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
               <input
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
-                aria-label="Recipe image file"
-                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                aria-label="Recipe image files"
+                onChange={handleCreateFilesSelected}
                 className="w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-700"
               />
-              <Button type="button" onClick={() => void handleCreateImageDraft()} disabled={isSaving || isEditMode || !selectedFile}>
-                Create draft from photo
+              <Button type="button" onClick={() => void handleCreateImageDrafts()} disabled={isSaving || isEditMode || batchItems.length === 0}>
+                {isSaving ? 'Processing photos...' : 'Create drafts from photos'}
               </Button>
             </div>
-            {imageImportWarnings.length > 0 ? (
-              <ul className="mt-3 space-y-1 text-sm text-amber-800">
-                {imageImportWarnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+            {batchItems.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {batchItems.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{item.fileName}</p>
+                        {item.recipeName ? <p className="text-xs text-slate-600">Draft: {item.recipeName}</p> : null}
+                        <p className="text-xs text-slate-500">{formatFileSize(item.sizeBytes)} • {getBatchStatusLabel(item.status)}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.recipeId ? (
+                          <Link to={`/cookbook/${item.recipeId}/edit`} className="text-xs font-semibold text-sky-700">
+                            Open draft
+                          </Link>
+                        ) : null}
+                        {item.status === 'needs_ocr' && item.recipeId && item.imageKey ? (
+                          <Button type="button" variant="secondary" onClick={() => void handleCreateBatchOcrRetry(item.id)} disabled={isSaving}>
+                            Retry with OCR
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                    {item.error ? <p className="mt-2 text-xs text-amber-800">{item.error}</p> : null}
+                    {item.warnings && item.warnings.length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-xs text-amber-800">
+                        {item.warnings.map((warning) => (
+                          <li key={`${item.id}-${warning}`}>{warning}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 ))}
-              </ul>
-            ) : null}
-            {imageImportRateLimited ? (
-              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-                <p className="text-sm font-medium text-amber-900">AI Vision is temporarily rate limited</p>
-                <p className="text-xs text-amber-800">
-                  OpenAI returned a rate limit error. You can retry using AWS Textract OCR instead — OCR reads raw text from the image and may need more manual cleanup than AI Vision, but it does not have rate limits.
-                </p>
-                <Button type="button" onClick={() => void handleOcrRetry(imageImportRateLimited)} disabled={isSaving}>
-                  Retry with OCR (lower fidelity)
-                </Button>
               </div>
             ) : null}
           </section>
@@ -599,7 +781,7 @@ export function RecipeEditorPage() {
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Recipe image
-                <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Recipe image file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} className="w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-700" />
+                <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Recipe image file" onChange={handleEditFileSelected} className="w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-700" />
                 {isEditMode ? <p className="text-xs text-slate-500">Select a new photo here, then re-run AI extraction to replace the current image before saving.</p> : null}
               </label>
             </section>
@@ -643,7 +825,7 @@ export function RecipeEditorPage() {
                     <p className="text-xs text-amber-800">
                       OpenAI returned a rate limit error. You can retry using AWS Textract OCR instead — OCR reads raw text from the image and may need more manual cleanup than AI Vision, but it does not have rate limits.
                     </p>
-                    <Button type="button" onClick={() => void handleOcrRetry(imageImportRateLimited)} disabled={isSaving}>
+                    <Button type="button" onClick={() => void handleEditOcrRetry(imageImportRateLimited)} disabled={isSaving}>
                       Retry with OCR (lower fidelity)
                     </Button>
                   </div>
@@ -850,4 +1032,114 @@ function parseInstructions(value: string): string[] {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function createBatchItem(file: File, index: number): BatchImportItem {
+  return {
+    id: `${file.name}-${file.lastModified}-${index}`,
+    file,
+    fileName: file.name,
+    sizeBytes: file.size,
+    status: 'queued'
+  };
+}
+
+function validateCreateBatchFiles(files: File[]): string | null {
+  if (files.length === 0) {
+    return 'Choose at least one recipe image.';
+  }
+
+  if (files.length > maxCreateBatchFiles) {
+    return 'Choose up to 3 recipe images per batch.';
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > maxCreateBatchBytes) {
+    return 'The selected images are too large together. Keep the total batch under 15 MB.';
+  }
+
+  for (const file of files) {
+    const message = validateSingleImageFile(file);
+    if (message) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+function validateSingleImageFile(file: File): string | null {
+  if (!supportedImageTypes.has(file.type)) {
+    return 'Only JPG, PNG, and WEBP images are supported for recipe import.';
+  }
+
+  if (file.size > maxImageBytes) {
+    return 'Each recipe image must be 5 MB or smaller.';
+  }
+
+  return null;
+}
+
+function getBatchStatusLabel(status: BatchImportStatus): string {
+  switch (status) {
+    case 'queued':
+      return 'Queued';
+    case 'uploading':
+      return 'Uploading image';
+    case 'extracting':
+      return 'Extracting recipe';
+    case 'created':
+      return 'Draft created';
+    case 'needs_ocr':
+      return 'Vision rate limited';
+    case 'quota_exceeded':
+      return 'Hourly limit reached';
+    case 'failed':
+      return 'Failed';
+  }
+}
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
+  }
+
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isVisionRateLimitError(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 429) {
+    return false;
+  }
+
+  const detail = getProblemDetail(error)?.toLowerCase() ?? '';
+  return detail.includes('ai vision') || detail.includes('use ocr');
+}
+
+function isImageQuotaExceededError(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 429) {
+    return false;
+  }
+
+  const detail = getProblemDetail(error)?.toLowerCase() ?? '';
+  const title = getProblemTitle(error)?.toLowerCase() ?? '';
+  return title.includes('image import limit reached') || detail.includes('20 recipe images per hour');
+}
+
+function getProblemDetail(error: ApiError): string | undefined {
+  if (!error.payload || typeof error.payload !== 'object' || !('detail' in error.payload)) {
+    return undefined;
+  }
+
+  const detail = (error.payload as { detail?: unknown }).detail;
+  return typeof detail === 'string' ? detail : undefined;
+}
+
+function getProblemTitle(error: ApiError): string | undefined {
+  if (!error.payload || typeof error.payload !== 'object' || !('title' in error.payload)) {
+    return undefined;
+  }
+
+  const title = (error.payload as { title?: unknown }).title;
+  return typeof title === 'string' ? title : undefined;
 }

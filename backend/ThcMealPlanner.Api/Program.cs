@@ -18,6 +18,7 @@ builder.Services.AddCognitoAuthentication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
+builder.Services.AddScoped<IRecipeImageImportQuotaService, RecipeImageImportQuotaService>();
 builder.Services.AddHttpClient<IRecipeImportService, RecipeImportService>();
 builder.Services.AddHttpClient<IMealPlanAiService, MealPlanAiService>();
 builder.Services.AddHttpClient<IChatService, ChatService>();

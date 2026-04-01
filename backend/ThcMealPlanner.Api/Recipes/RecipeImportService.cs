@@ -309,12 +309,33 @@ public sealed partial class RecipeImportService : IRecipeImportService
     {
         var endpoint = $"{_openAiOptions.BaseUrl.TrimEnd('/')}/chat/completions";
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        async Task<HttpResponseMessage> SendOnceAsync()
         {
-            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        return await _httpClient.SendAsync(request, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            return await _httpClient.SendAsync(request, cancellationToken);
+        }
+
+        var retryDelays = new[] { TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(6) };
+
+        for (var attempt = 0; attempt <= retryDelays.Length; attempt++)
+        {
+            var response = await SendOnceAsync();
+            if (response.StatusCode != HttpStatusCode.TooManyRequests || attempt == retryDelays.Length)
+            {
+                return response;
+            }
+
+            var retryDelay = response.Headers.RetryAfter?.Delta ?? retryDelays[attempt];
+            response.Dispose();
+            _logger?.LogWarning("OpenAI image extraction hit rate limit (429). Backing off for {DelaySeconds} seconds before retry {RetryAttempt}.", retryDelay.TotalSeconds, attempt + 2);
+            await Task.Delay(retryDelay, cancellationToken);
+        }
+
+        throw new InvalidOperationException("OpenAI image extraction retry logic reached an unexpected state.");
     }
 
     internal async Task<ImportedRecipeDraft> ParseImportedRecipeDraftAsync(
