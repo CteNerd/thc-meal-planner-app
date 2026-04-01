@@ -2,7 +2,7 @@ import { Card } from '../components/ui/Card';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getApiErrorMessage } from '../services/api';
-import { addFavoriteRecipe, listFavoriteRecipes, listRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+import { addFavoriteRecipe, deleteRecipe, listFavoriteRecipes, listRecipes, removeFavoriteRecipe } from '../services/recipeApi';
 import type { Recipe } from '../types';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -112,6 +112,34 @@ export function CookbookPage() {
     }
   }
 
+  async function deleteRecipeFromCookbook(recipeId: string) {
+    const recipe = recipes.find((entry) => entry.recipeId === recipeId);
+    if (!recipe) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete "${recipe.name}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsBusy(true);
+      setError(null);
+      await deleteRecipe(recipeId);
+      setRecipes((current) => current.filter((entry) => entry.recipeId !== recipeId));
+      setFavoriteRecipeIds((current) => {
+        const next = new Set(current);
+        next.delete(recipeId);
+        return next;
+      });
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to delete recipe.'));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -202,7 +230,15 @@ export function CookbookPage() {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => void deleteRecipeFromCookbook(recipe.recipeId)}
+                        disabled={isBusy}
+                      >
+                        Delete recipe
+                      </Button>
                       <Link to={`/cookbook/${recipe.recipeId}`} className="text-sm font-semibold text-sky-700 underline underline-offset-4">
                         View recipe
                       </Link>

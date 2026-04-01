@@ -5,18 +5,20 @@ import { MemoryRouter } from 'react-router-dom';
 import { CookbookPage } from './CookbookPage';
 import type { FavoriteRecipe, Recipe } from '../types';
 import { ApiError } from '../services/api';
-import { addFavoriteRecipe, listFavoriteRecipes, listRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+import { addFavoriteRecipe, deleteRecipe, listFavoriteRecipes, listRecipes, removeFavoriteRecipe } from '../services/recipeApi';
 
 vi.mock('../services/recipeApi', () => ({
   listRecipes: vi.fn(),
   listFavoriteRecipes: vi.fn(),
   addFavoriteRecipe: vi.fn(),
+  deleteRecipe: vi.fn(),
   removeFavoriteRecipe: vi.fn()
 }));
 
 const mockedListRecipes = vi.mocked(listRecipes);
 const mockedListFavoriteRecipes = vi.mocked(listFavoriteRecipes);
 const mockedAddFavoriteRecipe = vi.mocked(addFavoriteRecipe);
+const mockedDeleteRecipe = vi.mocked(deleteRecipe);
 const mockedRemoveFavoriteRecipe = vi.mocked(removeFavoriteRecipe);
 
 function buildRecipe(overrides?: Partial<Recipe>): Recipe {
@@ -59,6 +61,7 @@ describe('CookbookPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockedAddFavoriteRecipe.mockResolvedValue(buildFavorite());
+    mockedDeleteRecipe.mockResolvedValue();
     mockedRemoveFavoriteRecipe.mockResolvedValue();
   });
 
@@ -117,6 +120,41 @@ describe('CookbookPage', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Favorite' })).toBeInTheDocument();
+  });
+
+  it('deletes a recipe from the cookbook after confirmation', async () => {
+    mockedListRecipes.mockResolvedValue([
+      buildRecipe({ recipeId: 'rec_1', name: 'Veggie Stir Fry' }),
+      buildRecipe({ recipeId: 'rec_2', name: 'Taco Bowls' })
+    ]);
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderCookbookPage();
+
+    await screen.findByText('Veggie Stir Fry');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete recipe' })[0]);
+
+    await waitFor(() => {
+      expect(mockedDeleteRecipe).toHaveBeenCalledWith('rec_1');
+    });
+
+    expect(screen.queryByText('Veggie Stir Fry')).not.toBeInTheDocument();
+    expect(screen.getByText('Taco Bowls')).toBeInTheDocument();
+  });
+
+  it('does not delete a recipe when cookbook confirmation is cancelled', async () => {
+    mockedListRecipes.mockResolvedValue([buildRecipe()]);
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    renderCookbookPage();
+
+    await screen.findByText('Veggie Stir Fry');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete recipe' }));
+
+    expect(mockedDeleteRecipe).not.toHaveBeenCalled();
+    expect(screen.getByText('Veggie Stir Fry')).toBeInTheDocument();
   });
 
   it('shows api detail when load fails', async () => {
