@@ -4,16 +4,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { RecipeDetailPage } from './RecipeDetailPage';
 import type { FavoriteRecipe, Recipe } from '../types';
-import { addFavoriteRecipe, getRecipe, listFavoriteRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+import { addFavoriteRecipe, deleteRecipe, getRecipe, listFavoriteRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+
+const mockNavigate = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate
+  };
+});
 
 vi.mock('../services/recipeApi', () => ({
   addFavoriteRecipe: vi.fn(),
+  deleteRecipe: vi.fn(),
   getRecipe: vi.fn(),
   listFavoriteRecipes: vi.fn(),
   removeFavoriteRecipe: vi.fn()
 }));
 
 const mockedAddFavoriteRecipe = vi.mocked(addFavoriteRecipe);
+const mockedDeleteRecipe = vi.mocked(deleteRecipe);
 const mockedGetRecipe = vi.mocked(getRecipe);
 const mockedListFavoriteRecipes = vi.mocked(listFavoriteRecipes);
 const mockedRemoveFavoriteRecipe = vi.mocked(removeFavoriteRecipe);
@@ -59,6 +71,7 @@ function renderRecipeDetailPage() {
 describe('RecipeDetailPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockNavigate.mockReset();
   });
 
   it('loads and renders recipe details', async () => {
@@ -92,5 +105,36 @@ describe('RecipeDetailPage', () => {
     await waitFor(() => {
       expect(mockedRemoveFavoriteRecipe).toHaveBeenCalledWith('rec_1');
     });
+  });
+
+  it('deletes a recipe after confirmation', async () => {
+    mockedGetRecipe.mockResolvedValue(buildRecipe());
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+    mockedDeleteRecipe.mockResolvedValue();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderRecipeDetailPage();
+
+    await screen.findByText('Veggie Stir Fry');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete recipe' }));
+
+    await waitFor(() => {
+      expect(mockedDeleteRecipe).toHaveBeenCalledWith('rec_1');
+      expect(mockNavigate).toHaveBeenCalledWith('/cookbook');
+    });
+  });
+
+  it('does not delete when confirmation is cancelled', async () => {
+    mockedGetRecipe.mockResolvedValue(buildRecipe());
+    mockedListFavoriteRecipes.mockResolvedValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    renderRecipeDetailPage();
+
+    await screen.findByText('Veggie Stir Fry');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete recipe' }));
+
+    expect(mockedDeleteRecipe).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

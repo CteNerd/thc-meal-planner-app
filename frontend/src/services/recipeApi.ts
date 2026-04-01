@@ -28,6 +28,10 @@ export async function updateRecipe(recipeId: string, payload: UpdateRecipePayloa
   return await apiPut<Recipe, UpdateRecipePayload>(`/recipes/${recipeId}`, payload);
 }
 
+export async function deleteRecipe(recipeId: string): Promise<void> {
+  await apiDelete(`/recipes/${recipeId}`);
+}
+
 export async function importRecipeFromUrl(payload: ImportRecipeFromUrlPayload): Promise<ImportedRecipeDraft> {
   return await apiPost<ImportedRecipeDraft, ImportRecipeFromUrlPayload>('/recipes/import-from-url', payload);
 }

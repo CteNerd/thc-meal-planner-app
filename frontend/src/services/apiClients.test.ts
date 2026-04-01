@@ -27,6 +27,7 @@ import {
   getRecipe,
   createRecipe,
   updateRecipe,
+  deleteRecipe,
   importRecipeFromUrl,
   createRecipeUploadUrl,
   listFavoriteRecipes,
@@ -149,6 +150,7 @@ describe('service API clients', () => {
       instructions: []
     });
     await updateRecipe('recipe_1', { description: 'updated' });
+    await deleteRecipe('recipe_1');
     await importRecipeFromUrl({ url: 'https://example.com' });
     await createRecipeUploadUrl('recipe_1', { fileName: 'image.jpg', contentType: 'image/jpeg' });
     await listFavoriteRecipes('Dinner');
@@ -159,6 +161,7 @@ describe('service API clients', () => {
     expect(mockedApiGet).toHaveBeenCalledWith('/chat/history?conversationId=conv_1&limit=10');
     expect(mockedApiGet).toHaveBeenCalledWith('/recipes');
     expect(mockedApiGet).toHaveBeenCalledWith('/recipes/recipe_1');
+    expect(mockedApiDelete).toHaveBeenCalledWith('/recipes/recipe_1');
     expect(mockedApiPost).toHaveBeenCalledWith('/recipes/import-from-url', { url: 'https://example.com' });
     expect(mockedApiPost).toHaveBeenCalledWith('/recipes/recipe_1/upload-url', {
       fileName: 'image.jpg',

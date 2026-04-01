@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { getApiErrorMessage } from '../services/api';
-import { addFavoriteRecipe, getRecipe, listFavoriteRecipes, removeFavoriteRecipe } from '../services/recipeApi';
+import { addFavoriteRecipe, deleteRecipe, getRecipe, listFavoriteRecipes, removeFavoriteRecipe } from '../services/recipeApi';
 import type { Recipe } from '../types';
 
 export function RecipeDetailPage() {
   const { recipeId = '' } = useParams();
+  const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
@@ -73,6 +74,28 @@ export function RecipeDetailPage() {
     }
   }
 
+  async function deleteCurrentRecipe() {
+    if (!recipe) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete "${recipe.name}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsBusy(true);
+      setError(null);
+      await deleteRecipe(recipe.recipeId);
+      navigate('/cookbook');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to delete recipe.'));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   function toggleIngredient(index: number) {
     setCheckedIngredients((current) => {
       const next = new Set(current);
@@ -120,6 +143,9 @@ export function RecipeDetailPage() {
               <Link to={`/cookbook/${recipe.recipeId}/edit`}>
                 <Button type="button">Edit recipe</Button>
               </Link>
+              <Button type="button" variant="ghost" onClick={() => void deleteCurrentRecipe()} disabled={isBusy}>
+                Delete recipe
+              </Button>
             </div>
           </div>
 
