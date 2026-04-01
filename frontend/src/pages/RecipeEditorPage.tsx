@@ -16,8 +16,11 @@ import {
 import {
   CUISINE_OPTIONS,
   COOKING_METHOD_OPTIONS,
+  COOK_MINUTES_OPTIONS,
   DIFFICULTY_OPTIONS,
+  PREP_MINUTES_OPTIONS,
   PROTEIN_SOURCE_OPTIONS,
+  SERVINGS_OPTIONS,
   TAG_SUGGESTIONS
 } from '../constants/recipeOptions';
 import type { Recipe, RecipeIngredient, RecipePayload } from '../types';
@@ -348,17 +351,38 @@ export function RecipeEditorPage() {
             <section className="grid gap-4 md:grid-cols-3">
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Servings
-                <Input hasError={hasFieldError(validationErrors, 'servings')} value={form.servings} onChange={(event) => updateField(setForm, 'servings', event.target.value)} aria-label="Recipe servings" inputMode="numeric" />
+                <select value={form.servings} onChange={(event) => updateField(setForm, 'servings', event.target.value)} aria-label="Recipe servings" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'servings') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
+                  <option value="">Select servings</option>
+                  {SERVINGS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
                 {fieldErrorMessage(validationErrors, 'servings')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Prep minutes
-                <Input hasError={hasFieldError(validationErrors, 'prepTimeMinutes')} value={form.prepTimeMinutes} onChange={(event) => updateField(setForm, 'prepTimeMinutes', event.target.value)} aria-label="Recipe prep time" inputMode="numeric" />
+                <select value={form.prepTimeMinutes} onChange={(event) => updateField(setForm, 'prepTimeMinutes', event.target.value)} aria-label="Recipe prep time" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'prepTimeMinutes') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
+                  <option value="">Select prep time</option>
+                  {PREP_MINUTES_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p} min
+                    </option>
+                  ))}
+                </select>
                 {fieldErrorMessage(validationErrors, 'prepTimeMinutes')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cook minutes
-                <Input hasError={hasFieldError(validationErrors, 'cookTimeMinutes')} value={form.cookTimeMinutes} onChange={(event) => updateField(setForm, 'cookTimeMinutes', event.target.value)} aria-label="Recipe cook time" inputMode="numeric" />
+                <select value={form.cookTimeMinutes} onChange={(event) => updateField(setForm, 'cookTimeMinutes', event.target.value)} aria-label="Recipe cook time" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'cookTimeMinutes') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
+                  <option value="">Select cook time</option>
+                  {COOK_MINUTES_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c} min
+                    </option>
+                  ))}
+                </select>
                 {fieldErrorMessage(validationErrors, 'cookTimeMinutes')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">

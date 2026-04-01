@@ -83,3 +83,37 @@ export const TAG_SUGGESTIONS = [
   'vegetarian',
   'whole30'
 ];
+
+export const SERVINGS_OPTIONS = [
+  '1',
+  '2',
+  '4',
+  '6',
+  '8',
+  '12'
+];
+
+export const PREP_MINUTES_OPTIONS = [
+  '0',
+  '5',
+  '10',
+  '15',
+  '20',
+  '30',
+  '45',
+  '60',
+  '90'
+];
+
+export const COOK_MINUTES_OPTIONS = [
+  '0',
+  '5',
+  '10',
+  '15',
+  '20',
+  '30',
+  '45',
+  '60',
+  '90',
+  '120'
+];
