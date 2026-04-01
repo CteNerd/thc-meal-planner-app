@@ -53,6 +53,61 @@ public sealed class RecipeDocument
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
+public sealed class RecipeResponse
+{
+    public string RecipeId { get; init; } = string.Empty;
+
+    public string FamilyId { get; init; } = string.Empty;
+
+    public string Name { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    public string Category { get; init; } = string.Empty;
+
+    public string? Cuisine { get; init; }
+
+    public int? Servings { get; init; }
+
+    public int? PrepTimeMinutes { get; init; }
+
+    public int? CookTimeMinutes { get; init; }
+
+    public List<string>? ProteinSource { get; init; }
+
+    public List<string>? CookingMethod { get; init; }
+
+    public string? Difficulty { get; init; }
+
+    public List<string> Tags { get; init; } = [];
+
+    public List<RecipeIngredientModel> Ingredients { get; init; } = [];
+
+    public List<string> Instructions { get; init; } = [];
+
+    public RecipeNutritionModel? Nutrition { get; init; }
+
+    public string? ImageKey { get; init; }
+
+    public string? ImageUrl { get; init; }
+
+    public string? ThumbnailKey { get; init; }
+
+    public string SourceType { get; init; } = "manual";
+
+    public string? SourceUrl { get; init; }
+
+    public string? Variations { get; init; }
+
+    public string? StorageInfo { get; init; }
+
+    public string CreatedByUserId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; init; }
+}
+
 public sealed class RecipeIngredientModel
 {
     public string Name { get; init; } = string.Empty;

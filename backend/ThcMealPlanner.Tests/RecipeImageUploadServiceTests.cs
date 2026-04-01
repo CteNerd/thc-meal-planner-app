@@ -34,7 +34,8 @@ public sealed class RecipeImageUploadServiceTests
 
         response.ImageKey.Should().StartWith("recipes/rec_123/");
         response.ImageKey.Should().EndWith(".png");
-        response.ImageUrl.Should().Be($"/images/{response.ImageKey}");
+        response.ImageUrl.Should().Contain("thc-meal-planner-dev-recipe-images");
+        response.ImageUrl.Should().Contain(response.ImageKey);
         response.UploadUrl.Should().Contain("thc-meal-planner-dev-recipe-images");
         response.UploadUrl.Should().Contain("?");
     }

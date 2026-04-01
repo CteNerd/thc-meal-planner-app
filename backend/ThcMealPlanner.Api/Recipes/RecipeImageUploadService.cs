@@ -57,7 +57,7 @@ public sealed class RecipeImageUploadService : IRecipeImageUploadService
         {
             UploadUrl = uploadUrl,
             ImageKey = imageKey,
-            ImageUrl = $"/images/{imageKey}"
+            ImageUrl = CreateReadUrl(imageKey, TimeSpan.FromHours(1))
         });
     }
 

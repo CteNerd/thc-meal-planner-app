@@ -173,6 +173,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> ListRecipesAsync(
         HttpContext httpContext,
         IRecipeService recipeService,
+        IRecipeImageUploadService recipeImageUploadService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -183,13 +184,14 @@ public static class RecipeEndpoints
 
         var recipes = await recipeService.ListByFamilyAsync(userContext.FamilyId, cancellationToken);
 
-        return Results.Ok(recipes);
+        return Results.Ok(recipes.Select(recipe => ToResponse(recipe, recipeImageUploadService)).ToList());
     }
 
     private static async Task<IResult> GetRecipeAsync(
         HttpContext httpContext,
         string recipeId,
         IRecipeService recipeService,
+        IRecipeImageUploadService recipeImageUploadService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -200,7 +202,7 @@ public static class RecipeEndpoints
 
         var recipe = await recipeService.GetByIdAsync(userContext.FamilyId, recipeId, cancellationToken);
 
-        return recipe is null ? RecipeProblemDetails.RecipeNotFound() : Results.Ok(recipe);
+        return recipe is null ? RecipeProblemDetails.RecipeNotFound() : Results.Ok(ToResponse(recipe, recipeImageUploadService));
     }
 
     private static async Task<IResult> CreateRecipeAsync(
@@ -208,6 +210,7 @@ public static class RecipeEndpoints
         CreateRecipeRequest request,
         IValidator<CreateRecipeRequest> validator,
         IRecipeService recipeService,
+        IRecipeImageUploadService recipeImageUploadService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -224,7 +227,7 @@ public static class RecipeEndpoints
 
         var created = await recipeService.CreateAsync(userContext.FamilyId, userContext.Sub, request, cancellationToken);
 
-        return Results.Created($"/api/recipes/{created.RecipeId}", created);
+        return Results.Created($"/api/recipes/{created.RecipeId}", ToResponse(created, recipeImageUploadService));
     }
 
     private static async Task<IResult> UpdateRecipeAsync(
@@ -233,6 +236,7 @@ public static class RecipeEndpoints
         UpdateRecipeRequest request,
         IValidator<UpdateRecipeRequest> validator,
         IRecipeService recipeService,
+        IRecipeImageUploadService recipeImageUploadService,
         CancellationToken cancellationToken)
     {
         var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
@@ -249,7 +253,7 @@ public static class RecipeEndpoints
 
         var updated = await recipeService.UpdateAsync(userContext.FamilyId, recipeId, request, cancellationToken);
 
-        return updated is null ? RecipeProblemDetails.RecipeNotFound() : Results.Ok(updated);
+        return updated is null ? RecipeProblemDetails.RecipeNotFound() : Results.Ok(ToResponse(updated, recipeImageUploadService));
     }
 
     private static async Task<IResult> DeleteRecipeAsync(
@@ -340,5 +344,40 @@ public static class RecipeEndpoints
             .ToDictionary(
                 grouping => grouping.Key,
                 grouping => grouping.Select(error => error.ErrorMessage).ToArray());
+    }
+
+    private static RecipeResponse ToResponse(RecipeDocument recipe, IRecipeImageUploadService recipeImageUploadService)
+    {
+        return new RecipeResponse
+        {
+            RecipeId = recipe.RecipeId,
+            FamilyId = recipe.FamilyId,
+            Name = recipe.Name,
+            Description = recipe.Description,
+            Category = recipe.Category,
+            Cuisine = recipe.Cuisine,
+            Servings = recipe.Servings,
+            PrepTimeMinutes = recipe.PrepTimeMinutes,
+            CookTimeMinutes = recipe.CookTimeMinutes,
+            ProteinSource = recipe.ProteinSource,
+            CookingMethod = recipe.CookingMethod,
+            Difficulty = recipe.Difficulty,
+            Tags = recipe.Tags,
+            Ingredients = recipe.Ingredients,
+            Instructions = recipe.Instructions,
+            Nutrition = recipe.Nutrition,
+            ImageKey = recipe.ImageKey,
+            ImageUrl = string.IsNullOrWhiteSpace(recipe.ImageKey)
+                ? null
+                : recipeImageUploadService.CreateReadUrl(recipe.ImageKey, TimeSpan.FromHours(1)),
+            ThumbnailKey = recipe.ThumbnailKey,
+            SourceType = recipe.SourceType,
+            SourceUrl = recipe.SourceUrl,
+            Variations = recipe.Variations,
+            StorageInfo = recipe.StorageInfo,
+            CreatedByUserId = recipe.CreatedByUserId,
+            CreatedAt = recipe.CreatedAt,
+            UpdatedAt = recipe.UpdatedAt
+        };
     }
 }

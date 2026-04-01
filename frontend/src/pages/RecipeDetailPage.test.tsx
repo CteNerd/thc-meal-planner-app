@@ -75,13 +75,14 @@ describe('RecipeDetailPage', () => {
   });
 
   it('loads and renders recipe details', async () => {
-    mockedGetRecipe.mockResolvedValue(buildRecipe({ description: 'Fast and easy.' }));
+    mockedGetRecipe.mockResolvedValue(buildRecipe({ description: 'Fast and easy.', imageUrl: 'https://example.com/recipes/rec_1/main.jpg' }));
     mockedListFavoriteRecipes.mockResolvedValue([buildFavorite()]);
 
     renderRecipeDetailPage();
 
     expect(await screen.findByText('Veggie Stir Fry')).toBeInTheDocument();
     expect(screen.getByText('Fast and easy.')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Veggie Stir Fry' })).toHaveAttribute('src', 'https://example.com/recipes/rec_1/main.jpg');
     expect(screen.getByRole('button', { name: 'Favorited' })).toBeInTheDocument();
   });
 

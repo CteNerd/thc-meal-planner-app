@@ -33,6 +33,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 FamilyId = "FAM#test-family",
                 Name = "Test Family Recipe",
                 Category = "dinner",
+                ImageKey = "recipes/rec_1/test.jpg",
                 Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
                 Instructions = ["Cook"],
                 CreatedByUserId = "test-user-123",
@@ -60,10 +61,11 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
         var response = await client.GetAsync("/api/recipes");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var recipes = await response.Content.ReadFromJsonAsync<List<RecipeDocument>>();
+        var recipes = await response.Content.ReadFromJsonAsync<List<RecipeResponse>>();
         recipes.Should().NotBeNull();
         recipes!.Should().HaveCount(1);
         recipes[0].RecipeId.Should().Be("rec_1");
+        recipes[0].ImageUrl.Should().Be("https://example.com/recipes/rec_1/test.jpg");
     }
 
     [Fact]
@@ -84,10 +86,42 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var created = await response.Content.ReadFromJsonAsync<RecipeDocument>();
+        var created = await response.Content.ReadFromJsonAsync<RecipeResponse>();
         created.Should().NotBeNull();
         created!.RecipeId.Should().StartWith("rec_");
         created.FamilyId.Should().Be("FAM#test-family");
+    }
+
+    [Fact]
+    public async Task GetRecipe_WhenRecipeHasImageKey_ReturnsSignedImageUrl()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#test-family", "RECIPE#rec_detail"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_detail",
+                FamilyId = "FAM#test-family",
+                Name = "Detail Recipe",
+                Category = "dinner",
+                ImageKey = "recipes/rec_detail/main.jpg",
+                Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "test-user-123",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.GetAsync("/api/recipes/rec_detail");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var recipe = await response.Content.ReadFromJsonAsync<RecipeResponse>();
+        recipe.Should().NotBeNull();
+        recipe!.ImageUrl.Should().Be("https://example.com/recipes/rec_detail/main.jpg");
     }
 
     [Fact]
@@ -264,6 +298,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
         var payload = await response.Content.ReadFromJsonAsync<RecipeUploadUrlResponse>();
         payload.Should().NotBeNull();
         payload!.ImageKey.Should().Be("recipes/rec_upload/test.jpg");
+        payload.ImageUrl.Should().Be("https://example.com/recipes/rec_upload/test.jpg");
     }
 
     [Fact]
@@ -414,7 +449,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
             {
                 UploadUrl = "https://example.com/upload",
                 ImageKey = $"recipes/{recipeId}/test.jpg",
-                ImageUrl = $"/images/recipes/{recipeId}/test.jpg"
+                ImageUrl = $"https://example.com/recipes/{recipeId}/test.jpg"
             });
         }
 

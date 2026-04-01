@@ -149,9 +149,9 @@ export function RecipeDetailPage() {
             </div>
           </div>
 
-          {recipe.imageKey ? (
+          {recipe.imageUrl ? (
             <div className="overflow-hidden rounded-3xl bg-slate-100">
-              <img src={`/images/${recipe.imageKey}`} alt={recipe.name} className="h-72 w-full object-cover" />
+              <img src={recipe.imageUrl} alt={recipe.name} className="h-72 w-full object-cover" />
             </div>
           ) : null}
 

@@ -123,6 +123,7 @@ export type Recipe = {
   instructions: string[];
   nutrition?: RecipeNutrition;
   imageKey?: string;
+  imageUrl?: string;
   thumbnailKey?: string;
   sourceType: string;
   sourceUrl?: string;
