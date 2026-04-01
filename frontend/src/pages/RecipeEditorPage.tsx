@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
-import { getApiErrorMessage } from '../services/api';
+import { getApiErrorMessage, getApiValidationErrors } from '../services/api';
 import {
   createRecipe,
   createRecipeUploadUrl,
@@ -67,6 +67,7 @@ export function RecipeEditorPage() {
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     let active = true;
@@ -156,6 +157,7 @@ export function RecipeEditorPage() {
     try {
       setIsSaving(true);
       setError(null);
+      setValidationErrors({});
       const payload = toPayload(form);
       const savedRecipe = isEditMode && recipeId
         ? await updateRecipe(recipeId, payload)
@@ -175,6 +177,10 @@ export function RecipeEditorPage() {
 
       navigate(`/cookbook/${finalRecipe.recipeId}`);
     } catch (err) {
+      const fieldErrors = getApiValidationErrors(err);
+      if (fieldErrors) {
+        setValidationErrors(fieldErrors);
+      }
       setError(getApiErrorMessage(err, 'Unable to save recipe.'));
     } finally {
       setIsSaving(false);
@@ -284,15 +290,23 @@ export function RecipeEditorPage() {
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
+            {Object.keys(validationErrors).length > 0 ? (
+              <ul className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 list-disc list-inside space-y-0.5">
+                {Object.entries(validationErrors).flatMap(([, msgs]) => msgs).map((msg, i) => (
+                  <li key={i}>{msg}</li>
+                ))}
+              </ul>
+            ) : null}
 
             <section className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Name *
-                <Input required value={form.name} onChange={(event) => updateField(setForm, 'name', event.target.value)} aria-label="Recipe name" placeholder="Family Taco Bowls" />
+                <Input required hasError={hasFieldError(validationErrors, 'name')} value={form.name} onChange={(event) => updateField(setForm, 'name', event.target.value)} aria-label="Recipe name" placeholder="Family Taco Bowls" />
+                {fieldErrorMessage(validationErrors, 'name')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Category *
-                <select required value={form.category} onChange={(event) => updateField(setForm, 'category', event.target.value)} aria-label="Recipe category" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100">
+                <select required value={form.category} onChange={(event) => updateField(setForm, 'category', event.target.value)} aria-label="Recipe category" className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'category') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}>
                   <option value="breakfast">breakfast</option>
                   <option value="lunch">lunch</option>
                   <option value="dinner">dinner</option>
@@ -301,42 +315,51 @@ export function RecipeEditorPage() {
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700 md:col-span-2">
                 Description
-                <textarea value={form.description} onChange={(event) => updateField(setForm, 'description', event.target.value)} aria-label="Recipe description" rows={3} placeholder="One-sentence overview of flavor and prep style" className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
+                <textarea value={form.description} onChange={(event) => updateField(setForm, 'description', event.target.value)} aria-label="Recipe description" rows={3} placeholder="One-sentence overview of flavor and prep style" className={`w-full rounded-3xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'description') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`} />
+                {fieldErrorMessage(validationErrors, 'description')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cuisine
-                <Input value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" placeholder="Mexican" />
+                <Input hasError={hasFieldError(validationErrors, 'cuisine')} value={form.cuisine} onChange={(event) => updateField(setForm, 'cuisine', event.target.value)} aria-label="Recipe cuisine" placeholder="Mexican" />
+                {fieldErrorMessage(validationErrors, 'cuisine')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Tags
-                <Input value={form.tags} onChange={(event) => updateField(setForm, 'tags', event.target.value)} aria-label="Recipe tags" placeholder="kid-friendly, quick" />
+                <Input hasError={hasFieldError(validationErrors, 'tags')} value={form.tags} onChange={(event) => updateField(setForm, 'tags', event.target.value)} aria-label="Recipe tags" placeholder="kid-friendly, quick" />
+                {fieldErrorMessage(validationErrors, 'tags')}
               </label>
             </section>
 
             <section className="grid gap-4 md:grid-cols-3">
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Servings
-                <Input value={form.servings} onChange={(event) => updateField(setForm, 'servings', event.target.value)} aria-label="Recipe servings" inputMode="numeric" />
+                <Input hasError={hasFieldError(validationErrors, 'servings')} value={form.servings} onChange={(event) => updateField(setForm, 'servings', event.target.value)} aria-label="Recipe servings" inputMode="numeric" />
+                {fieldErrorMessage(validationErrors, 'servings')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Prep minutes
-                <Input value={form.prepTimeMinutes} onChange={(event) => updateField(setForm, 'prepTimeMinutes', event.target.value)} aria-label="Recipe prep time" inputMode="numeric" />
+                <Input hasError={hasFieldError(validationErrors, 'prepTimeMinutes')} value={form.prepTimeMinutes} onChange={(event) => updateField(setForm, 'prepTimeMinutes', event.target.value)} aria-label="Recipe prep time" inputMode="numeric" />
+                {fieldErrorMessage(validationErrors, 'prepTimeMinutes')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cook minutes
-                <Input value={form.cookTimeMinutes} onChange={(event) => updateField(setForm, 'cookTimeMinutes', event.target.value)} aria-label="Recipe cook time" inputMode="numeric" />
+                <Input hasError={hasFieldError(validationErrors, 'cookTimeMinutes')} value={form.cookTimeMinutes} onChange={(event) => updateField(setForm, 'cookTimeMinutes', event.target.value)} aria-label="Recipe cook time" inputMode="numeric" />
+                {fieldErrorMessage(validationErrors, 'cookTimeMinutes')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Protein source
-                <Input value={form.proteinSource} onChange={(event) => updateField(setForm, 'proteinSource', event.target.value)} aria-label="Recipe protein source" />
+                <Input hasError={hasFieldError(validationErrors, 'proteinSource')} value={form.proteinSource} onChange={(event) => updateField(setForm, 'proteinSource', event.target.value)} aria-label="Recipe protein source" />
+                {fieldErrorMessage(validationErrors, 'proteinSource')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Cooking method
-                <Input value={form.cookingMethod} onChange={(event) => updateField(setForm, 'cookingMethod', event.target.value)} aria-label="Recipe cooking method" />
+                <Input hasError={hasFieldError(validationErrors, 'cookingMethod')} value={form.cookingMethod} onChange={(event) => updateField(setForm, 'cookingMethod', event.target.value)} aria-label="Recipe cooking method" />
+                {fieldErrorMessage(validationErrors, 'cookingMethod')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Difficulty
-                <Input value={form.difficulty} onChange={(event) => updateField(setForm, 'difficulty', event.target.value)} aria-label="Recipe difficulty" />
+                <Input hasError={hasFieldError(validationErrors, 'difficulty')} value={form.difficulty} onChange={(event) => updateField(setForm, 'difficulty', event.target.value)} aria-label="Recipe difficulty" />
+                {fieldErrorMessage(validationErrors, 'difficulty')}
               </label>
             </section>
 
@@ -348,9 +371,10 @@ export function RecipeEditorPage() {
                   onChange={(event) => updateField(setForm, 'ingredients', event.target.value)}
                   aria-label="Recipe ingredients"
                   rows={10}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                  className={`w-full rounded-3xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'ingredients') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}
                   placeholder="One ingredient per line. Use quantity|unit|name|section|notes"
                 />
+                {fieldErrorMessage(validationErrors, 'ingredients')}
                 <p className="text-xs text-slate-500">Parsed ingredients: {ingredientPreviewCount}</p>
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
@@ -360,9 +384,10 @@ export function RecipeEditorPage() {
                   onChange={(event) => updateField(setForm, 'instructions', event.target.value)}
                   aria-label="Recipe instructions"
                   rows={10}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                  className={`w-full rounded-3xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'instructions') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`}
                   placeholder="One instruction per line"
                 />
+                {fieldErrorMessage(validationErrors, 'instructions')}
                 <p className="text-xs text-slate-500">Parsed steps: {instructionPreviewCount}</p>
               </label>
             </section>
@@ -370,18 +395,21 @@ export function RecipeEditorPage() {
             <section className="grid gap-4 lg:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Variations
-                <textarea value={form.variations} onChange={(event) => updateField(setForm, 'variations', event.target.value)} aria-label="Recipe variations" rows={4} className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
+                <textarea value={form.variations} onChange={(event) => updateField(setForm, 'variations', event.target.value)} aria-label="Recipe variations" rows={4} className={`w-full rounded-3xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'variations') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`} />
+                {fieldErrorMessage(validationErrors, 'variations')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Storage info
-                <textarea value={form.storageInfo} onChange={(event) => updateField(setForm, 'storageInfo', event.target.value)} aria-label="Recipe storage info" rows={4} className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
+                <textarea value={form.storageInfo} onChange={(event) => updateField(setForm, 'storageInfo', event.target.value)} aria-label="Recipe storage info" rows={4} className={`w-full rounded-3xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-4 ${hasFieldError(validationErrors, 'storageInfo') ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-sky-400 focus:ring-sky-100'}`} />
+                {fieldErrorMessage(validationErrors, 'storageInfo')}
               </label>
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Source URL
-                <Input value={form.sourceUrl} onChange={(event) => updateField(setForm, 'sourceUrl', event.target.value)} aria-label="Recipe source URL" placeholder="https://example.com/recipe" />
+                <Input hasError={hasFieldError(validationErrors, 'sourceUrl')} value={form.sourceUrl} onChange={(event) => updateField(setForm, 'sourceUrl', event.target.value)} aria-label="Recipe source URL" placeholder="https://example.com/recipe" />
+                {fieldErrorMessage(validationErrors, 'sourceUrl')}
               </label>
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Recipe image
@@ -410,6 +438,24 @@ function updateField(
   value: string
 ) {
   setForm((current) => ({ ...current, [field]: value }));
+}
+
+// FluentValidation emits PascalCase property names; camelCase form key → PascalCase lookup
+function hasFieldError(errors: Record<string, string[]>, formKey: string): boolean {
+  const pascal = formKey.charAt(0).toUpperCase() + formKey.slice(1);
+  return pascal in errors || Object.keys(errors).some((k) => k.startsWith(`${pascal}[`));
+}
+
+function fieldErrorMessage(errors: Record<string, string[]>, formKey: string): React.ReactNode {
+  const pascal = formKey.charAt(0).toUpperCase() + formKey.slice(1);
+  const msgs = [
+    ...(errors[pascal] ?? []),
+    ...Object.entries(errors)
+      .filter(([k]) => k.startsWith(`${pascal}[`))
+      .flatMap(([, v]) => v)
+  ];
+  if (msgs.length === 0) return null;
+  return <p className="text-xs text-red-600">{msgs[0]}</p>;
 }
 
 function toFormState(recipe: Recipe): RecipeFormState {

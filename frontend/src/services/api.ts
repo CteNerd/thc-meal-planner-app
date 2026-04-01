@@ -142,10 +142,6 @@ export function getApiErrorMessage(error: unknown, fallbackMessage: string): str
     return problem.detail;
   }
 
-  if (problem?.title && problem.title.trim().length > 0) {
-    return problem.title;
-  }
-
   if (problem?.errors) {
     const firstValidationMessage = Object.values(problem.errors)
       .flat()
@@ -156,7 +152,20 @@ export function getApiErrorMessage(error: unknown, fallbackMessage: string): str
     }
   }
 
+  if (problem?.title && problem.title.trim().length > 0) {
+    return problem.title;
+  }
+
   return fallbackMessage;
+}
+
+export function getApiValidationErrors(error: unknown): Record<string, string[]> | null {
+  if (!isApiError(error)) {
+    return null;
+  }
+
+  const problem = toProblemDetails(error.payload);
+  return problem?.errors ?? null;
 }
 
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
