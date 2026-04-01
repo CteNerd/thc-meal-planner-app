@@ -46,6 +46,7 @@ type RecipeFormState = {
   sourceType: string;
   sourceUrl: string;
   imageKey: string;
+  imageUrl: string;
 };
 
 const emptyForm: RecipeFormState = {
@@ -66,7 +67,8 @@ const emptyForm: RecipeFormState = {
   storageInfo: '',
   sourceType: 'manual',
   sourceUrl: '',
-  imageKey: ''
+  imageKey: '',
+  imageUrl: ''
 };
 
 export function RecipeEditorPage() {
@@ -78,6 +80,7 @@ export function RecipeEditorPage() {
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [imageImportWarnings, setImageImportWarnings] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +119,20 @@ export function RecipeEditorPage() {
     };
   }, [recipeId]);
 
+  useEffect(() => {
+    if (!selectedFile) {
+      setSelectedFilePreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setSelectedFilePreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedFile]);
+
   const ingredientPreviewCount = useMemo(() => {
     return parseIngredients(form.ingredients).length;
   }, [form.ingredients]);
@@ -123,6 +140,8 @@ export function RecipeEditorPage() {
   const instructionPreviewCount = useMemo(() => {
     return parseInstructions(form.instructions).length;
   }, [form.instructions]);
+
+  const displayedImageUrl = selectedFilePreviewUrl ?? form.imageUrl;
 
   async function handleImport() {
     if (!importUrl.trim()) {
@@ -168,14 +187,7 @@ export function RecipeEditorPage() {
 
       let finalRecipe = savedRecipe;
       if (selectedFile) {
-        const upload = await createRecipeUploadUrl(savedRecipe.recipeId, {
-          fileName: selectedFile.name,
-          contentType: selectedFile.type
-        });
-        await uploadRecipeImage(upload.uploadUrl, selectedFile);
-        finalRecipe = await updateRecipe(savedRecipe.recipeId, {
-          imageKey: upload.imageKey
-        });
+        finalRecipe = await uploadSelectedImage(savedRecipe.recipeId);
       }
 
       navigate(`/cookbook/${finalRecipe.recipeId}`);
@@ -263,7 +275,7 @@ export function RecipeEditorPage() {
   }
 
   async function handleReRunImageExtraction() {
-    if (!recipeId || !form.imageKey) {
+    if (!recipeId || (!form.imageKey && !selectedFile)) {
       setError('No uploaded image found for extraction.');
       return;
     }
@@ -272,19 +284,53 @@ export function RecipeEditorPage() {
       setIsSaving(true);
       setError(null);
       setImageImportWarnings([]);
-      const draft = await importRecipeFromImage(recipeId, { imageKey: form.imageKey });
+      let activeImageKey = form.imageKey;
+
+      if (selectedFile) {
+        const updatedRecipe = await uploadSelectedImage(recipeId, 'image_upload');
+        activeImageKey = updatedRecipe.imageKey ?? activeImageKey;
+      }
+
+      const draft = await importRecipeFromImage(recipeId, { imageKey: activeImageKey });
       const updated = await updateRecipe(recipeId, {
         ...toUpdatePayloadFromDraft(draft),
-        imageKey: form.imageKey,
+        imageKey: activeImageKey,
         sourceType: 'image_upload'
       });
       setForm(toFormState(updated));
+      setSelectedFile(null);
       setImageImportWarnings(draft.warnings);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to re-run AI extraction from the uploaded image.'));
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function uploadSelectedImage(targetRecipeId: string, sourceType?: string) {
+    if (!selectedFile) {
+      throw new Error('No image selected.');
+    }
+
+    const upload = await createRecipeUploadUrl(targetRecipeId, {
+      fileName: selectedFile.name,
+      contentType: selectedFile.type
+    });
+    await uploadRecipeImage(upload.uploadUrl, selectedFile);
+
+    const updatedRecipe = await updateRecipe(targetRecipeId, {
+      imageKey: upload.imageKey,
+      sourceType
+    });
+
+    setForm((current) => ({
+      ...current,
+      imageKey: updatedRecipe.imageKey ?? upload.imageKey,
+      imageUrl: updatedRecipe.imageUrl ?? upload.imageUrl,
+      sourceType: updatedRecipe.sourceType
+    }));
+
+    return updatedRecipe;
   }
 
   return (
@@ -503,22 +549,32 @@ export function RecipeEditorPage() {
               <label className="space-y-2 text-sm font-medium text-slate-700">
                 Recipe image
                 <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Recipe image file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} className="w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-700" />
+                {isEditMode ? <p className="text-xs text-slate-500">Select a new photo here, then re-run AI extraction to replace the current image before saving.</p> : null}
               </label>
             </section>
 
-            {form.imageKey ? (
+            {displayedImageUrl ? (
               <section className="rounded-3xl bg-slate-50 p-5">
                 <h4 className="text-sm font-semibold text-slate-900">Uploaded photo</h4>
-                <p className="mt-1 text-xs text-slate-600">This image is attached to the current recipe draft.</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {selectedFile
+                    ? `Pending replacement: ${selectedFile.name}.`
+                    : 'This image is attached to the current recipe draft.'}
+                </p>
                 {isEditMode ? (
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap gap-3">
                     <Button type="button" onClick={() => void handleReRunImageExtraction()} disabled={isSaving}>
-                      Re-run AI extraction from photo
+                      {selectedFile ? 'Replace photo and re-run AI extraction' : 'Re-run AI extraction from photo'}
                     </Button>
+                    {selectedFile ? (
+                      <Button type="button" variant="ghost" onClick={() => setSelectedFile(null)} disabled={isSaving}>
+                        Keep current photo
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
                 <img
-                  src={`/images/${form.imageKey}`}
+                  src={displayedImageUrl}
                   alt="Uploaded recipe"
                   className="mt-3 max-h-72 w-full rounded-2xl object-contain bg-white p-2"
                   loading="lazy"
@@ -593,7 +649,8 @@ function toFormState(recipe: Recipe): RecipeFormState {
     storageInfo: recipe.storageInfo ?? '',
     sourceType: recipe.sourceType,
     sourceUrl: recipe.sourceUrl ?? '',
-    imageKey: recipe.imageKey ?? ''
+    imageKey: recipe.imageKey ?? '',
+    imageUrl: recipe.imageUrl ?? ''
   };
 }
 
@@ -669,8 +726,8 @@ function toUpdatePayloadFromDraft(draft: ImportedRecipeDraft): UpdateRecipePaylo
     servings: mapped.servings ? Number(mapped.servings) : undefined,
     prepTimeMinutes: mapped.prepTimeMinutes ? Number(mapped.prepTimeMinutes) : undefined,
     cookTimeMinutes: mapped.cookTimeMinutes ? Number(mapped.cookTimeMinutes) : undefined,
-    proteinSource: normalizeStringArray(mapped.proteinSource),
-    cookingMethod: normalizeStringArray(mapped.cookingMethod),
+    proteinSource: mapped.proteinSource?.length ? normalizeStringArray(mapped.proteinSource) : undefined,
+    cookingMethod: mapped.cookingMethod?.length ? normalizeStringArray(mapped.cookingMethod) : undefined,
     difficulty: mapped.difficulty || undefined,
     tags: normalizeStringArray(draft.tags),
     ingredients: draft.ingredients,
