@@ -217,6 +217,7 @@ export function RecipeEditorPage() {
       const baseRecipe = await createRecipe({
         name: draftName.length > 0 ? draftName : `Photo recipe draft ${new Date().toISOString().slice(0, 10)}`,
         category: 'dinner',
+        cuisine: '',
         description: 'Draft created from recipe image upload. Complete details after review.',
         ingredients: [
           {
