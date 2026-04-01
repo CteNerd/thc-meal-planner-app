@@ -52,6 +52,7 @@ builder.Services.AddScoped<IValidator<CreateRecipeRequest>, CreateRecipeRequestV
 builder.Services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
 builder.Services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
 builder.Services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
+builder.Services.AddScoped<IValidator<ImportRecipeFromImageRequest>, ImportRecipeFromImageRequestValidator>();
 builder.Services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
 builder.Services.AddScoped<IValidator<ChatMessageRequest>, ChatMessageRequestValidator>();
 builder.Services.AddScoped<IValidator<SendTestNotificationRequest>, SendTestNotificationRequestValidator>();

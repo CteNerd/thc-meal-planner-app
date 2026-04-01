@@ -236,6 +236,44 @@ public sealed class RecipeImportServiceTests
         draft.Warnings.Should().Contain("AI-assisted extraction was used. Review before saving.");
     }
 
+    [Fact]
+    public async Task ImportFromImageAsync_WhenAiReturnsRecipe_ParsesImageDraft()
+    {
+        const string openAiResponse = """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"name\":\"Cacciucco\",\"description\":\"Tuscan seafood stew\",\"category\":\"dinner\",\"cuisine\":\"Italian\",\"servings\":6,\"prepTimeMinutes\":25,\"cookTimeMinutes\":60,\"tags\":[\"seafood\",\"stew\"],\"ingredients\":[\"1 kg mixed seafood\",\"400 ml passata\"],\"instructions\":[\"Saute aromatics.\",\"Add seafood and simmer.\"]}"
+                  }
+                }
+              ]
+            }
+            """;
+
+        using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler(openAiResponse));
+        var service = new RecipeImportService(
+            httpClient,
+            new StubApiKeyProvider("sk-test"),
+            Options.Create(new OpenAiOptions()),
+            NullLogger<RecipeImportService>.Instance);
+
+        var draft = await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", CancellationToken.None);
+
+        draft.Name.Should().Be("Cacciucco");
+        draft.Description.Should().Be("Tuscan seafood stew");
+        draft.Category.Should().Be("dinner");
+        draft.Cuisine.Should().Be("Italian");
+        draft.Servings.Should().Be(6);
+        draft.PrepTimeMinutes.Should().Be(25);
+        draft.CookTimeMinutes.Should().Be(60);
+        draft.Tags.Should().Contain(["seafood", "stew"]);
+        draft.Ingredients.Select(i => i.Name).Should().Contain(["1 kg mixed seafood", "400 ml passata"]);
+        draft.Instructions.Should().ContainInOrder("Saute aromatics.", "Add seafood and simmer.");
+        draft.SourceType.Should().Be("image_upload");
+        draft.Warnings.Should().Contain("AI vision extraction was used. Verify ingredients and steps before saving.");
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

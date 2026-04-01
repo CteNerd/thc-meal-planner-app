@@ -168,6 +168,10 @@ export type ImportRecipeFromUrlPayload = {
   url: string;
 };
 
+export type ImportRecipeFromImagePayload = {
+  imageKey?: string;
+};
+
 export type CreateRecipeUploadUrlPayload = {
   fileName: string;
   contentType: string;

@@ -256,6 +256,16 @@ public sealed class ImportRecipeFromUrlRequestValidator : AbstractValidator<Impo
     }
 }
 
+public sealed class ImportRecipeFromImageRequestValidator : AbstractValidator<ImportRecipeFromImageRequest>
+{
+    public ImportRecipeFromImageRequestValidator()
+    {
+        RuleFor(x => x.ImageKey)
+            .MaximumLength(300)
+            .When(x => x.ImageKey is not null);
+    }
+}
+
 public sealed class CreateRecipeUploadUrlRequestValidator : AbstractValidator<CreateRecipeUploadUrlRequest>
 {
     public CreateRecipeUploadUrlRequestValidator()

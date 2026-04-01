@@ -198,6 +198,11 @@ public sealed class ImportRecipeFromUrlRequest
     public string Url { get; init; } = string.Empty;
 }
 
+public sealed class ImportRecipeFromImageRequest
+{
+    public string? ImageKey { get; init; }
+}
+
 public sealed class ImportedRecipeDraft
 {
     public string Name { get; init; } = string.Empty;

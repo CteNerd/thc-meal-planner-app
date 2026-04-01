@@ -9,6 +9,7 @@ import {
   createRecipe,
   createRecipeUploadUrl,
   getRecipe,
+  importRecipeFromImage,
   importRecipeFromUrl,
   updateRecipe,
   uploadRecipeImage
@@ -24,7 +25,7 @@ import {
   SERVINGS_OPTIONS,
   TAG_SUGGESTIONS
 } from '../constants/recipeOptions';
-import type { Recipe, RecipeIngredient, RecipePayload } from '../types';
+import type { ImportedRecipeDraft, Recipe, RecipeIngredient, RecipePayload, UpdateRecipePayload } from '../types';
 
 type RecipeFormState = {
   name: string;
@@ -132,35 +133,10 @@ export function RecipeEditorPage() {
       setIsSaving(true);
       setError(null);
       const draft = await importRecipeFromUrl({ url: importUrl.trim() });
-      
-      // Map imported values to predefined dropdown options (with rounding for times)
-      const mapped = mapImportedValuesToOptions({
-        cuisine: draft.cuisine,
-        servings: draft.servings,
-        prepTimeMinutes: draft.prepTimeMinutes,
-        cookTimeMinutes: draft.cookTimeMinutes,
-        proteinSource: draft.proteinSource,
-        cookingMethod: draft.cookingMethod,
-        difficulty: draft.difficulty
-      });
 
       setForm((current) => ({
         ...current,
-        name: draft.name,
-        description: draft.description ?? '',
-        category: draft.category,
-        cuisine: mapped.cuisine,
-        servings: mapped.servings,
-        prepTimeMinutes: mapped.prepTimeMinutes,
-        cookTimeMinutes: mapped.cookTimeMinutes,
-        proteinSource: mapped.proteinSource,
-        cookingMethod: mapped.cookingMethod,
-        difficulty: mapped.difficulty,
-        tags: draft.tags,
-        ingredients: formatIngredients(draft.ingredients),
-        instructions: draft.instructions.join('\n'),
-        sourceType: draft.sourceType,
-        sourceUrl: draft.sourceUrl
+        ...mapDraftToFormValues(draft)
       }));
       setImportWarnings(draft.warnings);
     } catch (err) {
@@ -257,9 +233,51 @@ export function RecipeEditorPage() {
         sourceType: 'image_upload'
       });
 
-      navigate(`/cookbook/${updated.recipeId}/edit`);
+      let extractedRecipe = updated;
+      try {
+        const draft = await importRecipeFromImage(baseRecipe.recipeId, { imageKey: upload.imageKey });
+        extractedRecipe = await updateRecipe(baseRecipe.recipeId, {
+          ...toUpdatePayloadFromDraft(draft),
+          imageKey: upload.imageKey,
+          sourceType: 'image_upload'
+        });
+        setImportWarnings(draft.warnings);
+      } catch (importErr) {
+        setImportWarnings([
+          getApiErrorMessage(
+            importErr,
+            'Image uploaded, but AI extraction could not parse details. You can edit manually or re-run extraction from the edit page.'
+          )
+        ]);
+      }
+
+      navigate(`/cookbook/${extractedRecipe.recipeId}/edit`);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to create image draft recipe. Try a JPG/PNG/WEBP image under 10MB.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleReRunImageExtraction() {
+    if (!recipeId || !form.imageKey) {
+      setError('No uploaded image found for extraction.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+      const draft = await importRecipeFromImage(recipeId, { imageKey: form.imageKey });
+      const updated = await updateRecipe(recipeId, {
+        ...toUpdatePayloadFromDraft(draft),
+        imageKey: form.imageKey,
+        sourceType: 'image_upload'
+      });
+      setForm(toFormState(updated));
+      setImportWarnings(draft.warnings);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to re-run AI extraction from the uploaded image.'));
     } finally {
       setIsSaving(false);
     }
@@ -481,12 +499,26 @@ export function RecipeEditorPage() {
               <section className="rounded-3xl bg-slate-50 p-5">
                 <h4 className="text-sm font-semibold text-slate-900">Uploaded photo</h4>
                 <p className="mt-1 text-xs text-slate-600">This image is attached to the current recipe draft.</p>
+                {isEditMode ? (
+                  <div className="mt-3">
+                    <Button type="button" onClick={() => void handleReRunImageExtraction()} disabled={isSaving}>
+                      Re-run AI extraction from photo
+                    </Button>
+                  </div>
+                ) : null}
                 <img
                   src={`/images/${form.imageKey}`}
                   alt="Uploaded recipe"
                   className="mt-3 max-h-72 w-full rounded-2xl object-contain bg-white p-2"
                   loading="lazy"
                 />
+                {importWarnings.length > 0 ? (
+                  <ul className="mt-3 space-y-1 text-sm text-amber-800">
+                    {importWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </section>
             ) : null}
 
@@ -574,6 +606,65 @@ function toPayload(form: RecipeFormState): RecipePayload {
     sourceUrl: form.sourceUrl.trim() || undefined,
     variations: form.variations.trim(),
     storageInfo: form.storageInfo.trim()
+  };
+}
+
+function mapDraftToFormValues(draft: ImportedRecipeDraft): Partial<RecipeFormState> {
+  const mapped = mapImportedValuesToOptions({
+    cuisine: draft.cuisine,
+    servings: draft.servings,
+    prepTimeMinutes: draft.prepTimeMinutes,
+    cookTimeMinutes: draft.cookTimeMinutes,
+    proteinSource: draft.proteinSource,
+    cookingMethod: draft.cookingMethod,
+    difficulty: draft.difficulty
+  });
+
+  return {
+    name: draft.name,
+    description: draft.description ?? '',
+    category: draft.category,
+    cuisine: mapped.cuisine,
+    servings: mapped.servings,
+    prepTimeMinutes: mapped.prepTimeMinutes,
+    cookTimeMinutes: mapped.cookTimeMinutes,
+    proteinSource: mapped.proteinSource,
+    cookingMethod: mapped.cookingMethod,
+    difficulty: mapped.difficulty,
+    tags: draft.tags,
+    ingredients: formatIngredients(draft.ingredients),
+    instructions: draft.instructions.join('\n'),
+    sourceType: draft.sourceType,
+    sourceUrl: draft.sourceType === 'url' ? draft.sourceUrl : ''
+  };
+}
+
+function toUpdatePayloadFromDraft(draft: ImportedRecipeDraft): UpdateRecipePayload {
+  const mapped = mapImportedValuesToOptions({
+    cuisine: draft.cuisine,
+    servings: draft.servings,
+    prepTimeMinutes: draft.prepTimeMinutes,
+    cookTimeMinutes: draft.cookTimeMinutes,
+    proteinSource: draft.proteinSource,
+    cookingMethod: draft.cookingMethod,
+    difficulty: draft.difficulty
+  });
+
+  return {
+    name: draft.name,
+    description: draft.description,
+    category: draft.category,
+    cuisine: mapped.cuisine || undefined,
+    servings: mapped.servings ? Number(mapped.servings) : undefined,
+    prepTimeMinutes: mapped.prepTimeMinutes ? Number(mapped.prepTimeMinutes) : undefined,
+    cookTimeMinutes: mapped.cookTimeMinutes ? Number(mapped.cookTimeMinutes) : undefined,
+    proteinSource: mapped.proteinSource,
+    cookingMethod: mapped.cookingMethod,
+    difficulty: mapped.difficulty || undefined,
+    tags: draft.tags,
+    ingredients: draft.ingredients,
+    instructions: draft.instructions,
+    sourceType: draft.sourceType
   };
 }
 

@@ -11,12 +11,14 @@ namespace ThcMealPlanner.Api.Recipes;
 public interface IRecipeImportService
 {
     Task<ImportedRecipeDraft> ImportFromUrlAsync(string url, CancellationToken cancellationToken = default);
+    Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, CancellationToken cancellationToken = default);
 }
 
 public sealed partial class RecipeImportService : IRecipeImportService
 {
     private const int MaxResponseBytes = 1024 * 1024;
     private const int MaxAiInputCharacters = 24000;
+    private const string VisionModel = "gpt-4o";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -97,6 +99,94 @@ public sealed partial class RecipeImportService : IRecipeImportService
             fallbackDraft.Warnings.Add("Structured parsing failed; used best-effort text extraction.");
             return fallbackDraft;
         }
+    }
+
+    public async Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(imageUrl))
+        {
+            throw new InvalidOperationException("Image URL is required.");
+        }
+
+        if (_apiKeyProvider is null)
+        {
+            throw new InvalidOperationException("AI image extraction is not configured.");
+        }
+
+        var apiKey = await _apiKeyProvider.GetApiKeyAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new InvalidOperationException("AI image extraction API key is unavailable.");
+        }
+
+        var payload = new
+        {
+            model = VisionModel,
+            temperature = 0.1,
+            response_format = new { type = "json_object" },
+            messages = new object[]
+            {
+                new
+                {
+                    role = "system",
+                    content = "Extract one recipe from an image. Return strict JSON only with no markdown or prose."
+                },
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new
+                        {
+                            type = "text",
+                            text = BuildAiImageExtractionPrompt()
+                        },
+                        new
+                        {
+                            type = "image_url",
+                            image_url = new
+                            {
+                                url = imageUrl,
+                                detail = "high"
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_openAiOptions.BaseUrl.TrimEnd('/')}/chat/completions")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+        };
+
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"AI image extraction failed with status {(int)response.StatusCode}.");
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var content = ExtractAiMessageContent(body);
+
+        var sourceUrl = Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
+            ? uri
+            : new Uri("https://image-upload.local/recipe");
+
+        var draft = ParseAiDraftContent(
+            sourceUrl,
+            content,
+            sourceType: "image_upload",
+            reviewWarning: "AI vision extraction was used. Verify ingredients and steps before saving.");
+
+        if (draft is null)
+        {
+            throw new InvalidOperationException("AI image extraction did not return a usable recipe.");
+        }
+
+        return draft;
     }
 
     internal async Task<ImportedRecipeDraft> ParseImportedRecipeDraftAsync(
@@ -217,7 +307,27 @@ public sealed partial class RecipeImportService : IRecipeImportService
         ]);
     }
 
-    private static ImportedRecipeDraft? ParseAiDraftContent(Uri sourceUrl, string? content)
+    private static string BuildAiImageExtractionPrompt()
+    {
+        return string.Join('\n',
+        [
+            "Extract exactly one recipe from this image.",
+            "Return strict JSON in this shape only:",
+            "{\"name\":\"\",\"description\":\"\",\"category\":\"breakfast|lunch|dinner|snack\",\"cuisine\":\"\",\"servings\":0,\"prepTimeMinutes\":0,\"cookTimeMinutes\":0,\"tags\":[\"\"],\"ingredients\":[\"\"],\"instructions\":[\"\"]}",
+            "Rules:",
+            "- Capture ingredient quantities and units as written.",
+            "- Keep instruction order exactly as shown.",
+            "- If uncertain, leave scalar values null and add concise placeholders only for ingredients/instructions.",
+            "- Do not invent nutrition or details not visible in the image.",
+            "- Output JSON only, no markdown."
+        ]);
+    }
+
+    private static ImportedRecipeDraft? ParseAiDraftContent(
+        Uri sourceUrl,
+        string? content,
+        string sourceType = "url",
+        string reviewWarning = "AI-assisted extraction was used. Review before saving.")
     {
         if (string.IsNullOrWhiteSpace(content))
         {
@@ -241,7 +351,7 @@ public sealed partial class RecipeImportService : IRecipeImportService
 
             var ingredients = ParseAiIngredientList(root, "ingredients");
             var instructions = ParseAiStepList(root, "instructions");
-            var warnings = new List<string> { "AI-assisted extraction was used. Review before saving." };
+            var warnings = new List<string> { reviewWarning };
 
             if (ingredients.Count == 0)
             {
@@ -267,7 +377,7 @@ public sealed partial class RecipeImportService : IRecipeImportService
                 Tags = ParseAiStringList(root, "tags"),
                 Ingredients = ingredients,
                 Instructions = instructions,
-                SourceType = "url",
+                SourceType = sourceType,
                 SourceUrl = sourceUrl.ToString(),
                 Warnings = warnings
             };

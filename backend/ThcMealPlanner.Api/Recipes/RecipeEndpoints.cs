@@ -8,6 +8,7 @@ public static class RecipeEndpoints
     public static RouteGroupBuilder MapRecipeEndpoints(this RouteGroupBuilder group)
     {
         group.MapPost("/recipes/import-from-url", ImportRecipeFromUrlAsync);
+        group.MapPost("/recipes/{recipeId}/import-from-image", ImportRecipeFromImageAsync);
         group.MapPost("/recipes/{recipeId}/upload-url", CreateUploadUrlAsync);
         group.MapGet("/recipes/favorites", ListFavoritesAsync);
         group.MapPost("/recipes/{recipeId}/favorite", AddFavoriteAsync);
@@ -99,6 +100,68 @@ public static class RecipeEndpoints
             return Results.Problem(
                 statusCode: StatusCodes.Status500InternalServerError,
                 title: "Image upload unavailable",
+                detail: exception.Message);
+        }
+    }
+
+    private static async Task<IResult> ImportRecipeFromImageAsync(
+        HttpContext httpContext,
+        string recipeId,
+        ImportRecipeFromImageRequest request,
+        IValidator<ImportRecipeFromImageRequest> validator,
+        IRecipeService recipeService,
+        IRecipeImageUploadService recipeImageUploadService,
+        IRecipeImportService recipeImportService,
+        CancellationToken cancellationToken)
+    {
+        var userContext = AuthenticatedUserContextResolver.TryResolve(httpContext.User);
+        if (userContext is null)
+        {
+            return RecipeProblemDetails.MissingRequiredUserClaims();
+        }
+
+        var validationResult = await validator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        var recipe = await recipeService.GetByIdAsync(userContext.FamilyId, recipeId, cancellationToken);
+        if (recipe is null)
+        {
+            return RecipeProblemDetails.RecipeNotFound();
+        }
+
+        var imageKey = string.IsNullOrWhiteSpace(request.ImageKey)
+            ? recipe.ImageKey
+            : request.ImageKey;
+
+        if (string.IsNullOrWhiteSpace(imageKey))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Image import failed",
+                detail: "Recipe image is missing. Upload a recipe image first.");
+        }
+
+        try
+        {
+            var readUrl = recipeImageUploadService.CreateReadUrl(imageKey);
+            var draft = await recipeImportService.ImportFromImageAsync(readUrl, cancellationToken);
+            return Results.Ok(draft);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Image import failed",
+                detail: exception.Message);
+        }
+        catch (HttpRequestException exception)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Image import failed",
                 detail: exception.Message);
         }
     }

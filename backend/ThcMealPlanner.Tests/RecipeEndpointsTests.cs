@@ -267,6 +267,41 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
+    public async Task PostImportFromImage_WhenRecipeHasImageKey_ReturnsDraftRecipe()
+    {
+        var recipeRepository = new InMemoryRecipeRepository();
+        var favoriteRepository = new InMemoryFavoriteRepository();
+        await recipeRepository.PutAsync(
+            new DynamoDbKey("FAMILY#FAM#test-family", "RECIPE#rec_img"),
+            new RecipeDocument
+            {
+                RecipeId = "rec_img",
+                FamilyId = "FAM#test-family",
+                Name = "Image Recipe",
+                Category = "dinner",
+                Cuisine = "unspecified",
+                ImageKey = "recipes/rec_img/test.jpg",
+                Ingredients = [new RecipeIngredientModel { Name = "Rice" }],
+                Instructions = ["Cook"],
+                CreatedByUserId = "test-user-123",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var client = CreateAuthenticatedClient(recipeRepository, favoriteRepository);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/recipes/rec_img/import-from-image",
+            new ImportRecipeFromImageRequest());
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var draft = await response.Content.ReadFromJsonAsync<ImportedRecipeDraft>();
+        draft.Should().NotBeNull();
+        draft!.Name.Should().Be("Image Imported Draft");
+        draft.SourceType.Should().Be("image_upload");
+    }
+
+    [Fact]
     public async Task GetRecipes_WhenMissingRequiredClaims_ReturnsUnauthorizedProblemDetails()
     {
         var recipeRepository = new InMemoryRecipeRepository();
@@ -305,6 +340,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
                 services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
                 services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
+                services.AddScoped<IValidator<ImportRecipeFromImageRequest>, ImportRecipeFromImageRequestValidator>();
                 services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
             });
         }).CreateClient();
@@ -332,6 +368,7 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 services.AddScoped<IValidator<UpdateRecipeRequest>, UpdateRecipeRequestValidator>();
                 services.AddScoped<IValidator<FavoriteRecipeRequest>, FavoriteRecipeRequestValidator>();
                 services.AddScoped<IValidator<ImportRecipeFromUrlRequest>, ImportRecipeFromUrlRequestValidator>();
+                services.AddScoped<IValidator<ImportRecipeFromImageRequest>, ImportRecipeFromImageRequestValidator>();
                 services.AddScoped<IValidator<CreateRecipeUploadUrlRequest>, CreateRecipeUploadUrlRequestValidator>();
             });
         }).CreateClient();
@@ -351,6 +388,19 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 SourceUrl = url
             });
         }
+
+        public Task<ImportedRecipeDraft> ImportFromImageAsync(string imageUrl, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ImportedRecipeDraft
+            {
+                Name = "Image Imported Draft",
+                Category = "dinner",
+                Ingredients = [new RecipeIngredientModel { Name = "Image ingredient" }],
+                Instructions = ["Image step"],
+                SourceType = "image_upload",
+                SourceUrl = imageUrl
+            });
+        }
     }
 
     private sealed class FakeRecipeImageUploadService : IRecipeImageUploadService
@@ -366,6 +416,11 @@ public sealed class RecipeEndpointsTests : IClassFixture<WebApplicationFactory<P
                 ImageKey = $"recipes/{recipeId}/test.jpg",
                 ImageUrl = $"/images/recipes/{recipeId}/test.jpg"
             });
+        }
+
+        public string CreateReadUrl(string imageKey, TimeSpan? expiresIn = null)
+        {
+            return $"https://example.com/{imageKey}";
         }
     }
 

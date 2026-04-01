@@ -10,6 +10,8 @@ public interface IRecipeImageUploadService
         string recipeId,
         CreateRecipeUploadUrlRequest request,
         CancellationToken cancellationToken = default);
+
+    string CreateReadUrl(string imageKey, TimeSpan? expiresIn = null);
 }
 
 public sealed class RecipeImageUploadService : IRecipeImageUploadService
@@ -56,6 +58,25 @@ public sealed class RecipeImageUploadService : IRecipeImageUploadService
             UploadUrl = uploadUrl,
             ImageKey = imageKey,
             ImageUrl = $"/images/{imageKey}"
+        });
+    }
+
+    public string CreateReadUrl(string imageKey, TimeSpan? expiresIn = null)
+    {
+        if (string.IsNullOrWhiteSpace(imageKey))
+        {
+            throw new InvalidOperationException("Image key is required.");
+        }
+
+        var expiry = expiresIn ?? TimeSpan.FromMinutes(10);
+
+        return _s3.GetPreSignedURL(new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = imageKey,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(expiry),
+            Protocol = Protocol.HTTPS
         });
     }
 }

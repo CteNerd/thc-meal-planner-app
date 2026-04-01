@@ -3,6 +3,7 @@ import type {
   FavoriteRecipe,
   FavoriteRecipePayload,
   ImportedRecipeDraft,
+  ImportRecipeFromImagePayload,
   ImportRecipeFromUrlPayload,
   Recipe,
   RecipePayload,
@@ -29,6 +30,13 @@ export async function updateRecipe(recipeId: string, payload: UpdateRecipePayloa
 
 export async function importRecipeFromUrl(payload: ImportRecipeFromUrlPayload): Promise<ImportedRecipeDraft> {
   return await apiPost<ImportedRecipeDraft, ImportRecipeFromUrlPayload>('/recipes/import-from-url', payload);
+}
+
+export async function importRecipeFromImage(
+  recipeId: string,
+  payload: ImportRecipeFromImagePayload = {}
+): Promise<ImportedRecipeDraft> {
+  return await apiPost<ImportedRecipeDraft, ImportRecipeFromImagePayload>(`/recipes/${recipeId}/import-from-image`, payload);
 }
 
 export async function createRecipeUploadUrl(
