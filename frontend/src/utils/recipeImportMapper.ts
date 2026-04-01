@@ -4,17 +4,9 @@ import {
   COOK_MINUTES_OPTIONS,
   DIFFICULTY_OPTIONS,
   PREP_MINUTES_OPTIONS,
-  PROTEIN_SOURCE_OPTIONS
+  PROTEIN_SOURCE_OPTIONS,
+  SERVINGS_OPTIONS
 } from '../constants/recipeOptions';
-  import {
-    CUISINE_OPTIONS,
-    COOKING_METHOD_OPTIONS,
-    COOK_MINUTES_OPTIONS,
-    DIFFICULTY_OPTIONS,
-    PREP_MINUTES_OPTIONS,
-    PROTEIN_SOURCE_OPTIONS,
-    SERVINGS_OPTIONS
-  } from '../constants/recipeOptions';
 
 /**
  * Find the closest match in a list of options.
