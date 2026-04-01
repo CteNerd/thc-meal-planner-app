@@ -130,22 +130,33 @@ describe('ProfilePage', () => {
   });
 
   it('saves updated profile name and reflects updated value', async () => {
-    mockedGetProfile.mockResolvedValue(buildProfile());
+    mockedGetProfile.mockResolvedValue(buildProfile({ name: 'Adult 1', dietaryPrefs: ['vegetarian'] }));
     mockedListDependents.mockResolvedValue([]);
-    mockedUpdateProfile.mockResolvedValue(buildProfile({ name: 'Updated Name' }));
+    mockedUpdateProfile.mockResolvedValue(buildProfile({ name: 'Updated Name', dietaryPrefs: ['vegetarian'] }));
 
     render(<ProfilePage />);
 
     await screen.findByText(/signed in as adult1@example.com/i);
 
-    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Updated Name' } });
+    // Click Edit button to enter edit mode
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+
+    // Update the name field in the edit form
+    const nameInput = screen.getByLabelText('Name');
+    fireEvent.change(nameInput, { target: { value: 'Updated Name' } });
+
+    // Save the changes
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(mockedUpdateProfile).toHaveBeenCalledWith({ name: 'Updated Name' });
+      expect(mockedUpdateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Updated Name'
+        })
+      );
     });
 
-    expect(screen.getByLabelText('Profile name')).toHaveValue('Updated Name');
+    expect(screen.getByText('Updated Name')).toBeInTheDocument();
   });
 
   it('adds dependent on successful create and clears form fields', async () => {
