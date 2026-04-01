@@ -101,6 +101,7 @@ public sealed class RecipeImportServiceTests
           httpClient,
           null,
           null,
+          null,
           NullLogger<RecipeImportService>.Instance);
 
         var act = async () => await service.ImportFromUrlAsync("http://localhost/recipe", CancellationToken.None);
@@ -214,6 +215,7 @@ public sealed class RecipeImportServiceTests
         using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler(openAiResponse));
         var service = new RecipeImportService(
             httpClient,
+          null,
             new StubApiKeyProvider("sk-test"),
             Options.Create(new OpenAiOptions()),
             NullLogger<RecipeImportService>.Instance);
@@ -254,6 +256,7 @@ public sealed class RecipeImportServiceTests
         using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler(openAiResponse));
         var service = new RecipeImportService(
             httpClient,
+          null,
             new StubApiKeyProvider("sk-test"),
             Options.Create(new OpenAiOptions()),
             NullLogger<RecipeImportService>.Instance);

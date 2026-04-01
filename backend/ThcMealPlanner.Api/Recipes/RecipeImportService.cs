@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using Amazon.Textract;
+using Amazon.Textract.Model;
 using Microsoft.Extensions.Options;
 using ThcMealPlanner.Api.MealPlans;
 
@@ -18,23 +20,27 @@ public sealed partial class RecipeImportService : IRecipeImportService
 {
     private const int MaxResponseBytes = 1024 * 1024;
     private const int MaxAiInputCharacters = 24000;
+    private const int MaxTextractImageBytes = 5 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
     private readonly HttpClient _httpClient;
+    private readonly IAmazonTextract? _textractClient;
     private readonly IOpenAiApiKeyProvider? _apiKeyProvider;
     private readonly OpenAiOptions _openAiOptions;
     private readonly ILogger<RecipeImportService>? _logger;
 
     public RecipeImportService(
         HttpClient httpClient,
+        IAmazonTextract? textractClient,
         IOpenAiApiKeyProvider? apiKeyProvider,
         IOptions<OpenAiOptions>? openAiOptions,
         ILogger<RecipeImportService>? logger)
     {
         _httpClient = httpClient;
+        _textractClient = textractClient;
         _apiKeyProvider = apiKeyProvider;
         _openAiOptions = openAiOptions?.Value ?? new OpenAiOptions();
         _logger = logger;
@@ -105,6 +111,12 @@ public sealed partial class RecipeImportService : IRecipeImportService
         if (string.IsNullOrWhiteSpace(imageUrl))
         {
             throw new InvalidOperationException("Image URL is required.");
+        }
+
+        var textractDraft = await TryParseTextractDraftAsync(imageUrl, cancellationToken);
+        if (textractDraft is not null)
+        {
+            return textractDraft;
         }
 
         if (_apiKeyProvider is null)
@@ -182,6 +194,102 @@ public sealed partial class RecipeImportService : IRecipeImportService
         }
 
         return draft;
+    }
+
+    private async Task<ImportedRecipeDraft?> TryParseTextractDraftAsync(string imageUrl, CancellationToken cancellationToken)
+    {
+        if (_textractClient is null)
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var sourceUrl))
+        {
+            return null;
+        }
+
+        try
+        {
+            var imageBytes = await ReadImageBytesAsync(sourceUrl, cancellationToken);
+            using var documentStream = new MemoryStream(imageBytes, writable: false);
+            var response = await _textractClient.DetectDocumentTextAsync(new DetectDocumentTextRequest
+            {
+                Document = new Document
+                {
+                    Bytes = documentStream
+                }
+            }, cancellationToken);
+
+            var textLines = response.Blocks
+                .Where(block => block.BlockType == BlockType.LINE && !string.IsNullOrWhiteSpace(block.Text))
+                .Select(block => block.Text!.Trim())
+                .ToList();
+
+            if (textLines.Count == 0)
+            {
+                return null;
+            }
+
+            var parsedDraft = ParseDraftFromText(sourceUrl, string.Join('\n', textLines));
+            var warnings = new List<string> { "AWS Textract OCR extraction was used. Review before saving." };
+            warnings.AddRange(parsedDraft.Warnings);
+
+            return new ImportedRecipeDraft
+            {
+                Name = parsedDraft.Name,
+                Description = parsedDraft.Description,
+                Category = parsedDraft.Category,
+                Cuisine = parsedDraft.Cuisine,
+                Servings = parsedDraft.Servings,
+                PrepTimeMinutes = parsedDraft.PrepTimeMinutes,
+                CookTimeMinutes = parsedDraft.CookTimeMinutes,
+                ProteinSource = parsedDraft.ProteinSource,
+                CookingMethod = parsedDraft.CookingMethod,
+                Difficulty = parsedDraft.Difficulty,
+                Tags = parsedDraft.Tags,
+                Ingredients = parsedDraft.Ingredients,
+                Instructions = parsedDraft.Instructions,
+                Nutrition = parsedDraft.Nutrition,
+                SourceType = "image_upload",
+                SourceUrl = parsedDraft.SourceUrl,
+                Warnings = warnings
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or AmazonTextractException)
+        {
+            _logger?.LogWarning(ex, "Textract OCR extraction failed. Falling back to AI vision extraction.");
+            return null;
+        }
+    }
+
+    private async Task<byte[]> ReadImageBytesAsync(Uri imageUrl, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var memory = new MemoryStream();
+        var buffer = new byte[8192];
+        int bytesRead;
+
+        while ((bytesRead = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            var remainingBytes = MaxTextractImageBytes - (int)memory.Length;
+            if (remainingBytes <= 0)
+            {
+                throw new InvalidOperationException("Image exceeds 5 MB OCR limit.");
+            }
+
+            var bytesToWrite = Math.Min(bytesRead, remainingBytes);
+            await memory.WriteAsync(buffer.AsMemory(0, bytesToWrite), cancellationToken);
+
+            if (bytesToWrite < bytesRead)
+            {
+                throw new InvalidOperationException("Image exceeds 5 MB OCR limit.");
+            }
+        }
+
+        return memory.ToArray();
     }
 
     private async Task<HttpResponseMessage> SendOpenAiRequestWithRetryAsync(object payload, string apiKey, CancellationToken cancellationToken)

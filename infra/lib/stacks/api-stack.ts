@@ -45,6 +45,11 @@ export class ApiStack extends Stack {
     const openAiSecret = secretsmanager.Secret.fromSecretCompleteArn(this, 'OpenAiSecret', props.secrets.openAiSecretArn);
     openAiSecret.grantRead(handler.function);
 
+    handler.function.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['textract:DetectDocumentText'],
+      resources: ['*']
+    }));
+
     Object.values(props.data.tableNames).forEach((tableName) => {
       const table = dynamodb.Table.fromTableName(this, `${tableName}Ref`, tableName);
       table.grantReadWriteData(handler.function);
