@@ -606,10 +606,10 @@ function toPayload(form: RecipeFormState): RecipePayload {
     servings: parseOptionalNumber(form.servings),
     prepTimeMinutes: parseOptionalNumber(form.prepTimeMinutes),
     cookTimeMinutes: parseOptionalNumber(form.cookTimeMinutes),
-    proteinSource: form.proteinSource,
-    cookingMethod: form.cookingMethod,
+    proteinSource: normalizeStringArray(form.proteinSource),
+    cookingMethod: normalizeStringArray(form.cookingMethod),
     difficulty: form.difficulty.trim(),
-    tags: form.tags,
+    tags: normalizeStringArray(form.tags),
     ingredients: parseIngredients(form.ingredients),
     instructions: parseInstructions(form.instructions),
     imageKey: form.imageKey.trim() || undefined,
@@ -669,14 +669,24 @@ function toUpdatePayloadFromDraft(draft: ImportedRecipeDraft): UpdateRecipePaylo
     servings: mapped.servings ? Number(mapped.servings) : undefined,
     prepTimeMinutes: mapped.prepTimeMinutes ? Number(mapped.prepTimeMinutes) : undefined,
     cookTimeMinutes: mapped.cookTimeMinutes ? Number(mapped.cookTimeMinutes) : undefined,
-    proteinSource: mapped.proteinSource,
-    cookingMethod: mapped.cookingMethod,
+    proteinSource: normalizeStringArray(mapped.proteinSource),
+    cookingMethod: normalizeStringArray(mapped.cookingMethod),
     difficulty: mapped.difficulty || undefined,
-    tags: draft.tags,
+    tags: normalizeStringArray(draft.tags),
     ingredients: draft.ingredients,
     instructions: draft.instructions,
     sourceType: draft.sourceType
   };
+}
+
+function normalizeStringArray(values: string[] | undefined): string[] {
+  if (!values || values.length === 0) {
+    return [];
+  }
+
+  return values
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
 }
 
 function parseOptionalNumber(value: string): number | undefined {
