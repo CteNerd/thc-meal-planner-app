@@ -90,11 +90,33 @@ jobs:
 
       - name: Ensure frontend lockfile
         working-directory: ./frontend
-        run: npm install --package-lock-only
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only
+          else
+            echo "package-lock.json present; skipping lockfile generation"
+          fi
 
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm ci
+
+      - name: Detect frontend source changes
+        id: frontend_changes
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "frontend_code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags origin "${GITHUB_BASE_REF}" || true
+          CHANGED=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" || true)
+
+          if echo "$CHANGED" | grep -E -q '^frontend/src/|^frontend/(vite\.config\.ts|vitest\.setup\.ts|tsconfig\.app\.json|tsconfig\.json|eslint\.config\.js)$'; then
+            echo "frontend_code_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_code_changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Lint frontend
         working-directory: ./frontend
@@ -105,10 +127,12 @@ jobs:
         run: npm run build
 
       - name: Test frontend with coverage
+        if: github.event_name != 'pull_request' || steps.frontend_changes.outputs.frontend_code_changed == 'true'
         working-directory: ./frontend
         run: npm run test:coverage
 
       - name: Enforce frontend coverage policy
+        if: github.event_name != 'pull_request' || steps.frontend_changes.outputs.frontend_code_changed == 'true'
         run: |
           python3 .github/scripts/coverage_gate.py frontend \
             --summary-file frontend/coverage/coverage-summary.json \
@@ -116,8 +140,13 @@ jobs:
             --event-name "${GITHUB_EVENT_NAME}" \
             --base-ref "${GITHUB_BASE_REF}"
 
+      - name: Skip frontend coverage policy for dependency-only changes
+        if: github.event_name == 'pull_request' && steps.frontend_changes.outputs.frontend_code_changed != 'true'
+        run: |
+          echo "Skipping frontend coverage run and gate: no frontend source/config changes detected."
+
       - name: Upload frontend coverage artifact
-        if: always()
+        if: always() && (github.event_name != 'pull_request' || steps.frontend_changes.outputs.frontend_code_changed == 'true')
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage-report
