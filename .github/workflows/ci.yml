@@ -10,9 +10,12 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     env:
-      BACKEND_COVERAGE_MIN: '70'
-      BACKEND_COVERAGE_TARGET: '80'
-      BACKEND_CHANGED_FILES_TARGET: '80'
+      BACKEND_COVERAGE_MIN: '80'
+      BACKEND_COVERAGE_TARGET: '82'
+      BACKEND_BRANCH_COVERAGE_MIN: '50'
+      BACKEND_BRANCH_COVERAGE_TARGET: '55'
+      BACKEND_CHANGED_FILES_LINE_TARGET: '80'
+      BACKEND_CHANGED_FILES_BRANCH_TARGET: '80'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,141 +40,45 @@ jobs:
           --collect:"XPlat Code Coverage"
           --results-directory backend/TestResults
 
+      - name: Generate backend coverage report
+        if: always()
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          reportgenerator \
+            "-reports:backend/TestResults/**/coverage.cobertura.xml" \
+            "-targetdir:backend/TestResults/CoverageReport" \
+            "-reporttypes:Html"
+
       - name: Enforce backend coverage threshold
         run: |
-          python3 - <<'PY'
-          import os
-          import glob
-          import subprocess
-          from collections import defaultdict
-          import xml.etree.ElementTree as ET
+          python3 .github/scripts/coverage_gate.py backend \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --base-ref "${GITHUB_BASE_REF}" \
+            --line-min "${BACKEND_COVERAGE_MIN}" \
+            --line-target "${BACKEND_COVERAGE_TARGET}" \
+            --branch-min "${BACKEND_BRANCH_COVERAGE_MIN}" \
+            --branch-target "${BACKEND_BRANCH_COVERAGE_TARGET}" \
+            --changed-line-target "${BACKEND_CHANGED_FILES_LINE_TARGET}" \
+            --changed-branch-target "${BACKEND_CHANGED_FILES_BRANCH_TARGET}"
 
-          files = glob.glob('backend/TestResults/**/coverage.cobertura.xml', recursive=True)
-          if not files:
-              raise SystemExit('No backend coverage.cobertura.xml found')
-
-          report = max(files, key=os.path.getmtime)
-          tree = ET.parse(report)
-          root = tree.getroot()
-
-          def normalize(path):
-            return (path or '').replace('\\', '/')
-
-          def is_api_class(pkg_name, class_name, filename):
-            pkg_name = pkg_name or ''
-            class_name = class_name or ''
-            filename = normalize(filename)
-            return (
-              pkg_name == 'ThcMealPlanner.Api'
-              or pkg_name.startswith('ThcMealPlanner.Api.')
-              or class_name.startswith('ThcMealPlanner.Api')
-              or filename.startswith('ThcMealPlanner.Api/')
-              or '/ThcMealPlanner.Api/' in filename
-            )
-
-          total_covered = 0
-          total_valid = 0
-          file_hits = defaultdict(list)
-
-          for pkg in root.findall('./packages/package'):
-            pkg_name = pkg.attrib.get('name', '')
-            for cls in pkg.findall('./classes/class'):
-              class_name = cls.attrib.get('name', '')
-              filename = normalize(cls.attrib.get('filename', ''))
-
-              if not is_api_class(pkg_name, class_name, filename):
-                continue
-              if '/obj/' in filename:
-                continue
-
-              hits = [int(line.attrib.get('hits', '0')) for line in cls.findall('./lines/line')]
-              total_valid += len(hits)
-              total_covered += sum(1 for hit in hits if hit > 0)
-              file_hits[filename].extend(hits)
-
-          if total_valid == 0:
-            raise SystemExit('No API coverage lines found (excluding /obj/).')
-
-          line_pct = (total_covered / total_valid) * 100.0
-          print(f'Backend API (no-obj) line coverage: {total_covered}/{total_valid} ({line_pct:.2f}%)')
-
-          minimum = float(os.environ.get('BACKEND_COVERAGE_MIN', '70'))
-          target = float(os.environ.get('BACKEND_COVERAGE_TARGET', '80'))
-          changed_target = float(os.environ.get('BACKEND_CHANGED_FILES_TARGET', '80'))
-
-          if line_pct < minimum:
-            raise SystemExit(f'Backend API coverage below minimum: {line_pct:.2f}% < {minimum:.2f}%')
-
-          if line_pct < target:
-            print(f'WARNING: Backend API coverage below target: {line_pct:.2f}% < {target:.2f}%')
-
-          event_name = os.environ.get('GITHUB_EVENT_NAME', '')
-          if event_name != 'pull_request':
-            print('Skipping changed-file coverage gate (only enforced on pull_request).')
-            raise SystemExit(0)
-
-          base_ref = os.environ.get('GITHUB_BASE_REF', '').strip()
-          changed_paths = []
-          if base_ref:
-            subprocess.run(['git', 'fetch', '--no-tags', 'origin', base_ref], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            diff_range = f'origin/{base_ref}...HEAD'
-            try:
-              output = subprocess.check_output(['git', 'diff', '--name-only', diff_range], text=True)
-              changed_paths = [line.strip() for line in output.splitlines() if line.strip()]
-            except subprocess.CalledProcessError:
-              changed_paths = []
-
-          if not changed_paths:
-            try:
-              output = subprocess.check_output(['git', 'show', '--pretty=', '--name-only', 'HEAD'], text=True)
-              changed_paths = [line.strip() for line in output.splitlines() if line.strip()]
-            except subprocess.CalledProcessError:
-              changed_paths = []
-
-          changed_api_files = []
-          for path in changed_paths:
-            normalized = normalize(path)
-            if not normalized.startswith('backend/ThcMealPlanner.Api/'):
-              continue
-            if not normalized.endswith('.cs'):
-              continue
-            if '/obj/' in normalized:
-              continue
-            changed_api_files.append(normalized.removeprefix('backend/'))
-
-          changed_api_files = sorted(set(changed_api_files))
-
-          if not changed_api_files:
-            print('No changed backend API source files detected for changed-file coverage gate.')
-            raise SystemExit(0)
-
-          violations = []
-          for coverage_filename in changed_api_files:
-            hits = file_hits.get(coverage_filename, [])
-            valid = len(hits)
-            covered = sum(1 for hit in hits if hit > 0)
-            pct = (covered / valid * 100.0) if valid else 0.0
-
-            if valid == 0:
-              print(f'WARNING: {coverage_filename} has no coverage lines in report; skipping file-level enforcement.')
-              continue
-
-            print(f'Changed file coverage: {coverage_filename} -> {covered}/{valid} ({pct:.2f}%)')
-            if pct < changed_target:
-              violations.append((coverage_filename, pct, covered, valid))
-
-          if violations:
-            print('Files below changed-file coverage target:')
-            for path, pct, covered, valid in violations:
-              print(f'  - {path}: {covered}/{valid} ({pct:.2f}%) < {changed_target:.2f}%')
-            raise SystemExit('Changed backend API file coverage target not met.')
-          PY
+      - name: Upload backend coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          if-no-files-found: warn
+          path: |
+            backend/TestResults/CoverageReport
+            backend/TestResults/**/coverage.cobertura.xml
 
   frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -200,6 +107,23 @@ jobs:
       - name: Test frontend with coverage
         working-directory: ./frontend
         run: npm run test:coverage
+
+      - name: Enforce frontend coverage policy
+        run: |
+          python3 .github/scripts/coverage_gate.py frontend \
+            --summary-file frontend/coverage/coverage-summary.json \
+            --threshold-file frontend/coverage-thresholds.json \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --base-ref "${GITHUB_BASE_REF}"
+
+      - name: Upload frontend coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          if-no-files-found: warn
+          path: |
+            frontend/coverage
 
   e2e-smoke:
     runs-on: ubuntu-latest

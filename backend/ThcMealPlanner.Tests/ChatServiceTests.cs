@@ -217,12 +217,585 @@ public sealed class ChatServiceTests
         history[0].Content.Should().Be("two");
     }
 
+        [Fact]
+        public async Task SendMessageAsync_WhenCancelingPendingAction_ReturnsCanceledMessage()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var service = CreateService(chatRepo, apiKey: null, httpResponse: null);
+
+                await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest
+                        {
+                                ConversationId = "conv_cancel",
+                                Message = "Delete this recipe"
+                        });
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest
+                        {
+                                ConversationId = "conv_cancel",
+                                Message = "Cancel"
+                        });
+
+                response.AssistantMessage.Content.Should().Be("Canceled. I did not apply that action.");
+
+                var history = await chatRepo.QueryByPartitionKeyAsync($"USER#{UserId}");
+                history.Last(x => x.Role == ChatConstants.AssistantRole).Actions.Should().ContainSingle();
+                history.Last(x => x.Role == ChatConstants.AssistantRole).Actions[0].Status.Should().Be("canceled");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenConfirmingClearCompletedRequest_RemovesCompletedItems()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var groceryService = new StatefulGroceryListService
+                {
+                        CurrentList = new GroceryListDocument
+                        {
+                                FamilyId = FamilyId,
+                                ListId = "LIST#ACTIVE",
+                                Version = 3,
+                                CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+                                UpdatedAt = DateTimeOffset.UtcNow,
+                                Items =
+                                [
+                                        new GroceryItemDocument
+                                        {
+                                                Id = "done_1",
+                                                Name = "Milk",
+                                                Section = "dairy",
+                                                Quantity = 1,
+                                                Unit = "carton",
+                                                MealAssociations = [],
+                                                CheckedOff = true,
+                                                InStock = false
+                                        },
+                                        new GroceryItemDocument
+                                        {
+                                                Id = "todo_1",
+                                                Name = "Bread",
+                                                Section = "pantry",
+                                                Quantity = 1,
+                                                Unit = "loaf",
+                                                MealAssociations = [],
+                                                CheckedOff = false,
+                                                InStock = false
+                                        }
+                                ],
+                                Progress = new GroceryProgressDocument { Total = 2, Completed = 1, Percentage = 50 }
+                        }
+                };
+
+                var service = CreateService(chatRepo, apiKey: null, httpResponse: null, groceryListService: groceryService);
+
+                var prompt = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest
+                        {
+                                ConversationId = "conv_clear_completed",
+                                Message = "Please clear completed items from the grocery list"
+                        });
+
+                prompt.AssistantMessage.RequiresConfirmation.Should().BeTrue();
+                prompt.AssistantMessage.PendingActionType.Should().Be("clear_completed_grocery");
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest
+                        {
+                                ConversationId = "conv_clear_completed",
+                                Message = "Confirm"
+                        });
+
+                response.AssistantMessage.Content.Should().Be("Cleared 1 completed grocery item(s).");
+                groceryService.CurrentList!.Items.Should().ContainSingle(i => i.Id == "todo_1");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallAddsPantryItems_UsesPantryAction()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var groceryService = new StatefulGroceryListService();
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "manage_pantry",
+                                                    "arguments": "{\"action\":\"add_items\",\"items\":[{\"name\":\"Rice\",\"section\":\"pantry\"},{\"name\":\"Beans\"}]}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        groceryListService: groceryService);
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest { Message = "Add pantry staples for dinner prep" });
+
+                response.AssistantMessage.Content.Should().Contain("Added 2 item(s) to pantry staples.");
+                groceryService.Pantry.Items.Should().Contain(i => i.Name == "Rice");
+                groceryService.Pantry.Items.Should().Contain(i => i.Name == "Beans");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallUpdatesProfile_PersistsProfileChanges()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var profileRepository = new InMemoryRepository<UserProfileDocument>();
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "update_profile",
+                                                    "arguments": "{\"updates\":{\"name\":\"Alex\",\"dietaryPrefs\":[\"vegetarian\"],\"excludedIngredients\":[\"shrimp\"]}}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        profileRepository: profileRepository);
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest { Message = "Update my meal profile for recipes" });
+
+                response.AssistantMessage.Content.Should().Contain("Updated profile for **Alex**.");
+
+                var stored = await profileRepository.GetAsync(new DynamoDbKey($"USER#{UserId}", "PROFILE"));
+                stored.Should().NotBeNull();
+                stored!.DietaryPrefs.Should().ContainSingle("vegetarian");
+                stored.ExcludedIngredients.Should().ContainSingle("shrimp");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallGetsNutritionSummary_ReturnsTotals()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var recipeService = new StubRecipeService
+                {
+                        Recipes =
+                        [
+                                new RecipeDocument
+                                {
+                                        RecipeId = "rec_1",
+                                        FamilyId = FamilyId,
+                                        Name = "Salmon Bowl",
+                                        Category = "dinner",
+                                        Ingredients = [new RecipeIngredientModel { Name = "salmon" }],
+                                        Instructions = ["Cook"],
+                                        Nutrition = new RecipeNutritionModel { Calories = 500, Protein = 30, Carbohydrates = 20, Fat = 25 },
+                                        CreatedByUserId = UserId,
+                                        CreatedAt = DateTimeOffset.UtcNow,
+                                        UpdatedAt = DateTimeOffset.UtcNow
+                                },
+                                new RecipeDocument
+                                {
+                                        RecipeId = "rec_2",
+                                        FamilyId = FamilyId,
+                                        Name = "Rice Bowl",
+                                        Category = "dinner",
+                                        Ingredients = [new RecipeIngredientModel { Name = "rice" }],
+                                        Instructions = ["Cook"],
+                                        Nutrition = new RecipeNutritionModel { Calories = 300, Protein = 5, Carbohydrates = 50, Fat = 3 },
+                                        CreatedByUserId = UserId,
+                                        CreatedAt = DateTimeOffset.UtcNow,
+                                        UpdatedAt = DateTimeOffset.UtcNow
+                                }
+                        ]
+                };
+
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "get_nutritional_info",
+                                                    "arguments": "{\"recipeIds\":[\"rec_1\",\"rec_2\"]}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        recipeService: recipeService);
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest { Message = "Show nutrition for dinner recipes" });
+
+                response.AssistantMessage.Content.Should().Contain("800 kcal, 35g protein, 70g carbs, 28g fat");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallModifiesMealPlan_UpdatesSlotAndRefreshesGroceryList()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var mealPlanService = new StatefulMealPlanService
+                {
+                        CurrentPlan = new MealPlanDocument
+                        {
+                                FamilyId = FamilyId,
+                                WeekStartDate = "2026-03-30",
+                                Status = "active",
+                                Meals =
+                                [
+                                        new MealSlotDocument { Day = "Monday", MealType = "dinner", RecipeId = "rec_old", RecipeName = "Old Dinner", Servings = 4 }
+                                ],
+                                GeneratedBy = "ai",
+                                ConstraintsUsed = "v1",
+                                CreatedAt = DateTimeOffset.UtcNow,
+                                UpdatedAt = DateTimeOffset.UtcNow
+                        }
+                };
+                var groceryService = new StatefulGroceryListService();
+                var recipeService = new StubRecipeService
+                {
+                        ById = new Dictionary<string, RecipeDocument>(StringComparer.OrdinalIgnoreCase)
+                        {
+                                ["rec_new"] = new RecipeDocument
+                                {
+                                        RecipeId = "rec_new",
+                                        FamilyId = FamilyId,
+                                        Name = "New Dinner",
+                                        Category = "dinner",
+                                        Ingredients = [new RecipeIngredientModel { Name = "chicken" }],
+                                        Instructions = ["Cook"],
+                                        CreatedByUserId = UserId,
+                                        CreatedAt = DateTimeOffset.UtcNow,
+                                        UpdatedAt = DateTimeOffset.UtcNow
+                                }
+                        }
+                };
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "modify_meal_plan",
+                                                    "arguments": "{\"day\":\"Monday\",\"mealType\":\"dinner\",\"newRecipeId\":\"rec_new\"}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        mealPlanService: mealPlanService,
+                        recipeService: recipeService,
+                        groceryListService: groceryService);
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest { Message = "Swap Monday dinner in my meal plan" });
+
+                response.AssistantMessage.Content.Should().Contain("Updated Monday dinner to **New Dinner**");
+                mealPlanService.LastUpdateRequest.Should().NotBeNull();
+                groceryService.GenerateCalls.Should().Be(1);
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenNoApiKeyAndMealPlanIntent_UsesDeterministicGeneration()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var mealPlanService = new StatefulMealPlanService
+                {
+                        CurrentPlan = new MealPlanDocument
+                        {
+                                FamilyId = FamilyId,
+                                WeekStartDate = "2026-03-30",
+                                Status = "active",
+                                Meals =
+                                [
+                                        new MealSlotDocument { Day = "Monday", MealType = "breakfast", RecipeId = "rec_1", RecipeName = "Oats" },
+                                        new MealSlotDocument { Day = "Monday", MealType = "dinner", RecipeId = "rec_2", RecipeName = "Pasta" }
+                                ],
+                                GeneratedBy = "ai",
+                                ConstraintsUsed = "v1",
+                                CreatedAt = DateTimeOffset.UtcNow,
+                                UpdatedAt = DateTimeOffset.UtcNow
+                        }
+                };
+                var groceryService = new StatefulGroceryListService();
+
+                var service = CreateService(
+                        chatRepo,
+                        apiKey: null,
+                        httpResponse: null,
+                        mealPlanService: mealPlanService,
+                        groceryListService: groceryService);
+
+                var response = await service.SendMessageAsync(
+                        FamilyId,
+                        UserId,
+                        "Adult 1",
+                        new ChatMessageRequest { Message = "Generate a meal plan for 2026-03-30" });
+
+                response.AssistantMessage.Content.Should().Contain("Generated a meal plan for **2026-03-30** with 2 meals");
+                groceryService.GenerateCalls.Should().Be(1);
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallCreatesRecipe_CreatesRecipeFromArguments()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var recipeService = new StubRecipeService();
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "create_recipe",
+                                                    "arguments": "{\"name\":\"Veggie Tacos\",\"category\":\"dinner\",\"ingredients\":[{\"name\":\"Tortillas\",\"quantity\":\"8\"}],\"instructions\":[\"Warm tortillas\",\"Serve\"],\"tags\":[\"quick\"]}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        recipeService: recipeService);
+
+                var response = await service.SendMessageAsync(FamilyId, UserId, "Adult 1", new ChatMessageRequest { Message = "Create a taco recipe" });
+
+                response.AssistantMessage.Content.Should().Contain("Created recipe **Veggie Tacos**");
+                recipeService.LastCreateRequest.Should().NotBeNull();
+                recipeService.LastCreateRequest!.Ingredients.Should().ContainSingle(i => i.Name == "Tortillas");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallListsGroceryItems_ReturnsCurrentList()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var groceryService = new StatefulGroceryListService
+                {
+                        CurrentList = new GroceryListDocument
+                        {
+                                FamilyId = FamilyId,
+                                ListId = "LIST#ACTIVE",
+                                Version = 1,
+                                CreatedAt = DateTimeOffset.UtcNow,
+                                UpdatedAt = DateTimeOffset.UtcNow,
+                                Items =
+                                [
+                                        new GroceryItemDocument { Id = "item_1", Name = "Milk", Section = "dairy", MealAssociations = [] },
+                                        new GroceryItemDocument { Id = "item_2", Name = "Apples", Section = "produce", MealAssociations = [] }
+                                ],
+                                Progress = new GroceryProgressDocument { Total = 2, Completed = 0, Percentage = 0 }
+                        }
+                };
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "manage_grocery_list",
+                                                    "arguments": "{\"action\":\"list\"}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        groceryListService: groceryService);
+
+                var response = await service.SendMessageAsync(FamilyId, UserId, "Adult 1", new ChatMessageRequest { Message = "Show my grocery list" });
+
+                response.AssistantMessage.Content.Should().Contain("Current grocery list:");
+                response.AssistantMessage.Content.Should().Contain("Milk (dairy)");
+                response.AssistantMessage.Content.Should().Contain("Apples (produce)");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallSearchesRecipes_ReturnsMatchingSafeRecipes()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var recipeService = new StubRecipeService
+                {
+                        Recipes =
+                        [
+                                new RecipeDocument
+                                {
+                                        RecipeId = "rec_1",
+                                        FamilyId = FamilyId,
+                                        Name = "Quick Pasta",
+                                        Category = "dinner",
+                                        Tags = ["quick", "family"],
+                                        PrepTimeMinutes = 10,
+                                        CookTimeMinutes = 10,
+                                        Ingredients = [new RecipeIngredientModel { Name = "pasta" }],
+                                        Instructions = ["Cook"]
+                                },
+                                new RecipeDocument
+                                {
+                                        RecipeId = "rec_2",
+                                        FamilyId = FamilyId,
+                                        Name = "Slow Chili",
+                                        Category = "dinner",
+                                        Tags = ["slow"],
+                                        PrepTimeMinutes = 30,
+                                        CookTimeMinutes = 45,
+                                        Ingredients = [new RecipeIngredientModel { Name = "beans" }],
+                                        Instructions = ["Cook"]
+                                }
+                        ]
+                };
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "search_recipes",
+                                                    "arguments": "{\"query\":\"Pasta\",\"category\":\"dinner\",\"maxPrepTime\":25,\"tags\":[\"quick\"]}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") },
+                        recipeService: recipeService);
+
+                var response = await service.SendMessageAsync(FamilyId, UserId, "Adult 1", new ChatMessageRequest { Message = "Search dinner recipes" });
+
+                response.AssistantMessage.Content.Should().Contain("Here are matching recipes:");
+                response.AssistantMessage.Content.Should().Contain("Quick Pasta");
+                response.AssistantMessage.Content.Should().NotContain("Slow Chili");
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WhenToolCallModifiesMealPlanWithoutActivePlan_ReturnsFailureMessage()
+        {
+                var chatRepo = new InMemoryRepository<ChatHistoryMessageDocument>();
+                var openAiBody = """
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": "modify_meal_plan",
+                                                    "arguments": "{\"day\":\"Monday\",\"mealType\":\"dinner\"}"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                        """;
+
+                var service = CreateService(
+                        chatRepo,
+                        "sk-test",
+                        new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(openAiBody, Encoding.UTF8, "application/json") });
+
+                var response = await service.SendMessageAsync(FamilyId, UserId, "Adult 1", new ChatMessageRequest { Message = "Swap a dinner" });
+
+                response.AssistantMessage.Content.Should().Be("There is no active meal plan to modify.");
+        }
+
     private static ChatService CreateService(
         InMemoryRepository<ChatHistoryMessageDocument> chatRepository,
         string? apiKey,
-        HttpResponseMessage? httpResponse)
+                HttpResponseMessage? httpResponse,
+                IMealPlanService? mealPlanService = null,
+                IRecipeService? recipeService = null,
+                IGroceryListService? groceryListService = null,
+                InMemoryRepository<UserProfileDocument>? profileRepository = null,
+                IDependentProfileService? dependentProfileService = null)
     {
-        var profileRepository = new InMemoryRepository<UserProfileDocument>();
+                profileRepository ??= new InMemoryRepository<UserProfileDocument>();
         var apiKeyProvider = new StubApiKeyProvider(apiKey);
         var handler = new StubHttpMessageHandler(httpResponse);
 
@@ -230,11 +803,11 @@ public sealed class ChatServiceTests
             chatRepository,
             apiKeyProvider,
             Options.Create(new OpenAiOptions()),
-            new NoOpMealPlanService(),
-            new NoOpRecipeService(),
-            new NoOpGroceryListService(),
+                        mealPlanService ?? new NoOpMealPlanService(),
+                        recipeService ?? new NoOpRecipeService(),
+                        groceryListService ?? new NoOpGroceryListService(),
             profileRepository,
-            new NoOpDependentProfileService(),
+                        dependentProfileService ?? new NoOpDependentProfileService(),
             new HttpClient(handler),
             NullLogger<ChatService>.Instance);
     }
@@ -351,13 +924,95 @@ public sealed class ChatServiceTests
         public Task<bool> DeleteAsync(string familyId, string weekStartDate, CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 
-    private sealed class NoOpRecipeService : IRecipeService
+    private sealed class StatefulMealPlanService : IMealPlanService
     {
-        public Task<IReadOnlyList<RecipeDocument>> ListByFamilyAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RecipeDocument>>([]);
+        public MealPlanDocument? CurrentPlan { get; set; }
 
-        public Task<RecipeDocument?> GetByIdAsync(string familyId, string recipeId, CancellationToken cancellationToken = default) => Task.FromResult<RecipeDocument?>(null);
+        public UpdateMealPlanRequest? LastUpdateRequest { get; private set; }
 
-        public Task<RecipeDocument> CreateAsync(string familyId, string userId, CreateRecipeRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new RecipeDocument());
+        public IReadOnlyList<MealSwapSuggestion> Suggestions { get; set; } = [];
+
+        public Task<MealPlanDocument?> GetCurrentAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult(CurrentPlan);
+
+        public Task<MealPlanDocument?> GetByWeekAsync(string familyId, string weekStartDate, CancellationToken cancellationToken = default) => Task.FromResult(CurrentPlan);
+
+        public Task<IReadOnlyList<MealPlanDocument>> GetHistoryAsync(string familyId, int limit = 10, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MealPlanDocument>>(CurrentPlan is null ? [] : [CurrentPlan]);
+
+        public Task<MealPlanDocument> CreateAsync(string familyId, string userId, CreateMealPlanRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(CurrentPlan ?? new MealPlanDocument());
+
+        public Task<MealPlanDocument> GenerateAsync(string familyId, string userId, GenerateMealPlanRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(CurrentPlan ?? new MealPlanDocument { WeekStartDate = request.WeekStartDate, FamilyId = familyId, Meals = [] });
+
+        public Task<IReadOnlyList<MealSwapSuggestion>> SuggestSwapOptionsAsync(string familyId, string weekStartDate, string day, string mealType, int limit = 5, CancellationToken cancellationToken = default, string? profileContext = null)
+            => Task.FromResult(Suggestions);
+
+        public Task<MealPlanDocument?> UpdateAsync(string familyId, string weekStartDate, UpdateMealPlanRequest request, CancellationToken cancellationToken = default)
+        {
+            LastUpdateRequest = request;
+            if (CurrentPlan is null)
+            {
+                return Task.FromResult<MealPlanDocument?>(null);
+            }
+
+            var updatedMeals = request.Meals?.Select(m => new MealSlotDocument
+            {
+                Day = m.Day,
+                MealType = m.MealType,
+                RecipeId = m.RecipeId,
+                RecipeName = m.RecipeId,
+                Servings = m.Servings
+            }).ToList() ?? CurrentPlan.Meals;
+
+            CurrentPlan = new MealPlanDocument
+            {
+                FamilyId = CurrentPlan.FamilyId,
+                WeekStartDate = CurrentPlan.WeekStartDate,
+                Status = CurrentPlan.Status,
+                Meals = updatedMeals,
+                NutritionalSummary = CurrentPlan.NutritionalSummary,
+                ConstraintsUsed = CurrentPlan.ConstraintsUsed,
+                GeneratedBy = CurrentPlan.GeneratedBy,
+                QualityScore = CurrentPlan.QualityScore,
+                CreatedAt = CurrentPlan.CreatedAt,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                TTL = CurrentPlan.TTL
+            };
+            return Task.FromResult<MealPlanDocument?>(CurrentPlan);
+        }
+
+        public Task<bool> DeleteAsync(string familyId, string weekStartDate, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    }
+
+    private class StubRecipeService : IRecipeService
+    {
+        public IReadOnlyList<RecipeDocument> Recipes { get; set; } = [];
+
+        public Dictionary<string, RecipeDocument> ById { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public CreateRecipeRequest? LastCreateRequest { get; private set; }
+
+        public virtual Task<IReadOnlyList<RecipeDocument>> ListByFamilyAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult(Recipes);
+
+        public virtual Task<RecipeDocument?> GetByIdAsync(string familyId, string recipeId, CancellationToken cancellationToken = default)
+            => Task.FromResult(ById.TryGetValue(recipeId, out var recipe) ? recipe : null);
+
+        public virtual Task<RecipeDocument> CreateAsync(string familyId, string userId, CreateRecipeRequest request, CancellationToken cancellationToken = default)
+        {
+            LastCreateRequest = request;
+            return Task.FromResult(new RecipeDocument
+            {
+                RecipeId = "rec_created",
+                FamilyId = familyId,
+                Name = request.Name,
+                Category = request.Category,
+                Ingredients = request.Ingredients ?? [],
+                Instructions = request.Instructions ?? [],
+                CreatedByUserId = userId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
 
         public Task<RecipeDocument?> UpdateAsync(string familyId, string recipeId, UpdateRecipeRequest request, CancellationToken cancellationToken = default) => Task.FromResult<RecipeDocument?>(null);
 
@@ -370,29 +1025,137 @@ public sealed class ChatServiceTests
         public Task<IReadOnlyList<FavoriteRecipeDocument>> ListFavoritesAsync(string userId, string? category, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<FavoriteRecipeDocument>>([]);
     }
 
-    private sealed class NoOpGroceryListService : IGroceryListService
+    private sealed class NoOpRecipeService : StubRecipeService
     {
-        public Task<GroceryListDocument?> GetCurrentAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<GroceryListDocument?>(null);
+    }
 
-        public Task<GroceryListDocument> GenerateAsync(string familyId, string userId, string? userName, GenerateGroceryListRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new GroceryListDocument());
+    private class StatefulGroceryListService : IGroceryListService
+    {
+        public GroceryListDocument? CurrentList { get; set; }
 
-        public Task<GroceryItemMutationResult> ToggleItemAsync(string familyId, string itemId, string userId, string? userName, ToggleGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+        public PantryStaplesDocument Pantry { get; private set; } = new();
 
-        public Task<GroceryItemMutationResult> AddItemAsync(string familyId, AddGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundList);
+        public int GenerateCalls { get; private set; }
 
-        public Task<GroceryItemMutationResult> SetInStockAsync(string familyId, string itemId, SetInStockRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+        public virtual Task<GroceryListDocument?> GetCurrentAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult(CurrentList);
 
-        public Task<GroceryItemMutationResult> RemoveItemAsync(string familyId, string itemId, RemoveGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+        public virtual Task<GroceryListDocument> GenerateAsync(string familyId, string userId, string? userName, GenerateGroceryListRequest request, CancellationToken cancellationToken = default)
+        {
+            GenerateCalls += 1;
+            CurrentList ??= new GroceryListDocument
+            {
+                FamilyId = familyId,
+                ListId = "LIST#ACTIVE",
+                Version = 1,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Items = [],
+                Progress = new GroceryProgressDocument()
+            };
 
-        public Task<GroceryListPollResult> PollAsync(string familyId, DateTimeOffset? since, CancellationToken cancellationToken = default) => Task.FromResult(GroceryListPollResult.NotFound);
+            return Task.FromResult(CurrentList);
+        }
 
-        public Task<PantryStaplesDocument> GetPantryStaplesAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
+        public virtual Task<GroceryItemMutationResult> ToggleItemAsync(string familyId, string itemId, string userId, string? userName, ToggleGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
 
-        public Task<PantryStaplesDocument> ReplacePantryStaplesAsync(string familyId, ReplacePantryStaplesRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId, Items = request.Items });
+        public virtual Task<GroceryItemMutationResult> AddItemAsync(string familyId, AddGroceryItemRequest request, CancellationToken cancellationToken = default)
+        {
+            if (CurrentList is null)
+            {
+                return Task.FromResult(GroceryItemMutationResult.NotFoundList);
+            }
 
-        public Task<PantryStaplesDocument> AddPantryStapleAsync(string familyId, AddPantryStapleItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
+            var item = new GroceryItemDocument
+            {
+                Id = $"item_{CurrentList.Version + 1}",
+                Name = request.Name,
+                Section = request.Section,
+                Quantity = request.Quantity ?? 1,
+                Unit = request.Unit,
+                MealAssociations = [],
+                CheckedOff = false,
+                InStock = false
+            };
 
-        public Task<bool> DeletePantryStapleAsync(string familyId, string name, CancellationToken cancellationToken = default) => Task.FromResult(false);
+            CurrentList = CurrentList with
+            {
+                Items = [.. CurrentList.Items, item],
+                Version = CurrentList.Version + 1,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Progress = new GroceryProgressDocument { Total = CurrentList.Items.Count + 1, Completed = CurrentList.Items.Count(i => i.CheckedOff), Percentage = 0 }
+            };
+
+            return Task.FromResult(GroceryItemMutationResult.Success(item, CurrentList));
+        }
+
+        public virtual Task<GroceryItemMutationResult> SetInStockAsync(string familyId, string itemId, SetInStockRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+
+        public virtual Task<GroceryItemMutationResult> RemoveItemAsync(string familyId, string itemId, RemoveGroceryItemRequest request, CancellationToken cancellationToken = default)
+        {
+            if (CurrentList is null)
+            {
+                return Task.FromResult(GroceryItemMutationResult.NotFoundList);
+            }
+
+            var item = CurrentList.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item is null)
+            {
+                return Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+            }
+
+            var items = CurrentList.Items.Where(i => i.Id != itemId).ToList();
+            CurrentList = CurrentList with
+            {
+                Items = items,
+                Version = CurrentList.Version + 1,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Progress = new GroceryProgressDocument { Total = items.Count, Completed = items.Count(i => i.CheckedOff), Percentage = items.Count == 0 ? 0 : 100 * items.Count(i => i.CheckedOff) / items.Count }
+            };
+
+            return Task.FromResult(GroceryItemMutationResult.Success(item, CurrentList));
+        }
+
+        public virtual Task<GroceryListPollResult> PollAsync(string familyId, DateTimeOffset? since, CancellationToken cancellationToken = default) => Task.FromResult(GroceryListPollResult.NotFound);
+
+        public virtual Task<PantryStaplesDocument> GetPantryStaplesAsync(string familyId, CancellationToken cancellationToken = default)
+        {
+            Pantry = Pantry with { FamilyId = familyId };
+            return Task.FromResult(Pantry);
+        }
+
+        public virtual Task<PantryStaplesDocument> ReplacePantryStaplesAsync(string familyId, ReplacePantryStaplesRequest request, CancellationToken cancellationToken = default)
+        {
+            Pantry = new PantryStaplesDocument { FamilyId = familyId, Items = request.Items, PreferredSectionOrder = request.PreferredSectionOrder ?? [], UpdatedAt = DateTimeOffset.UtcNow };
+            return Task.FromResult(Pantry);
+        }
+
+        public virtual Task<PantryStaplesDocument> AddPantryStapleAsync(string familyId, AddPantryStapleItemRequest request, CancellationToken cancellationToken = default)
+        {
+            Pantry = Pantry with
+            {
+                FamilyId = familyId,
+                Items = [.. Pantry.Items, new PantryStapleItemDocument { Name = request.Name, Section = request.Section }],
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            return Task.FromResult(Pantry);
+        }
+
+        public virtual Task<bool> DeletePantryStapleAsync(string familyId, string name, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    }
+
+    private sealed class NoOpGroceryListService : StatefulGroceryListService
+    {
+        public override Task<GroceryListDocument?> GetCurrentAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult<GroceryListDocument?>(null);
+
+        public override Task<GroceryListDocument> GenerateAsync(string familyId, string userId, string? userName, GenerateGroceryListRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new GroceryListDocument());
+
+        public override Task<GroceryItemMutationResult> AddItemAsync(string familyId, AddGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundList);
+
+        public override Task<GroceryItemMutationResult> RemoveItemAsync(string familyId, string itemId, RemoveGroceryItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(GroceryItemMutationResult.NotFoundItem);
+
+        public override Task<PantryStaplesDocument> GetPantryStaplesAsync(string familyId, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
+
+        public override Task<PantryStaplesDocument> AddPantryStapleAsync(string familyId, AddPantryStapleItemRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new PantryStaplesDocument { FamilyId = familyId });
     }
 
     private sealed class NoOpDependentProfileService : IDependentProfileService

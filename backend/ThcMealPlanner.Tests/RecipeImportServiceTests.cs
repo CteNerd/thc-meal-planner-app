@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -314,6 +316,90 @@ public sealed class RecipeImportServiceTests
             .WithMessage("*OCR extraction did not produce usable results*");
     }
 
+      [Fact]
+      public async Task ImportFromUrlAsync_WhenUrlHasEmbeddedCredentials_RejectsRequest()
+      {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler())
+        {
+          BaseAddress = new Uri("https://example.com")
+        };
+        var service = new RecipeImportService(
+          httpClient,
+          null,
+          null,
+          null,
+          NullLogger<RecipeImportService>.Instance);
+
+        var act = async () => await service.ImportFromUrlAsync("https://user:pass@example.com/recipe", CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+          .WithMessage("*embedded credentials*");
+      }
+
+      [Fact]
+      public async Task ImportFromUrlAsync_WhenResponseIsTruncated_AddsTruncationWarning()
+      {
+        var largeHtml = "<html><head><title>Big Soup</title></head><body><h2>Ingredients</h2><ul><li>1 onion</li></ul><h2>Instructions</h2><ol><li>Cook slowly.</li></ol>" + new string('a', 1_100_000) + "</body></html>";
+        using var httpClient = new HttpClient(new LargeHtmlHttpMessageHandler(largeHtml));
+        var service = new RecipeImportService(
+          httpClient,
+          null,
+          null,
+          null,
+          NullLogger<RecipeImportService>.Instance);
+
+        var draft = await service.ImportFromUrlAsync("https://example.com/large-recipe", CancellationToken.None);
+
+        draft.Name.Should().Be("Big Soup");
+        draft.Warnings.Should().Contain(w => w.Contains("truncated snapshot", StringComparison.OrdinalIgnoreCase));
+      }
+
+      [Fact]
+      public async Task ImportFromImageAsync_WhenApiKeyIsBlank_ThrowsInvalidOperationException()
+      {
+        using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler("{}"));
+        var service = new RecipeImportService(
+          httpClient,
+          null,
+          new StubApiKeyProvider("   "),
+          Options.Create(new OpenAiOptions()),
+          NullLogger<RecipeImportService>.Instance);
+
+        var act = async () => await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", cancellationToken: CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+          .WithMessage("*API key is unavailable*");
+      }
+
+      [Fact]
+      public async Task ImportFromImageAsync_WhenAiReturnsInvalidRecipe_ThrowsInvalidOperationException()
+      {
+        const string invalidOpenAiResponse = """
+          {
+            "choices": [
+            {
+              "message": {
+              "content": "{\"description\":\"missing name\"}"
+              }
+            }
+            ]
+          }
+          """;
+
+        using var httpClient = new HttpClient(new OpenAiOnlyHttpMessageHandler(invalidOpenAiResponse));
+        var service = new RecipeImportService(
+          httpClient,
+          null,
+          new StubApiKeyProvider("sk-test"),
+          Options.Create(new OpenAiOptions()),
+          NullLogger<RecipeImportService>.Instance);
+
+        var act = async () => await service.ImportFromImageAsync("https://example.com/recipe-image.jpg", cancellationToken: CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+          .WithMessage("*did not return a usable recipe*");
+      }
+
     private sealed class TooManyRequestsHttpMessageHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -355,6 +441,24 @@ public sealed class RecipeImportServiceTests
             });
         }
     }
+
+        private sealed class LargeHtmlHttpMessageHandler : HttpMessageHandler
+        {
+          private readonly string _html;
+
+          public LargeHtmlHttpMessageHandler(string html)
+          {
+            _html = html;
+          }
+
+          protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+          {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+              Content = new StringContent(_html, Encoding.UTF8, mediaType: "text/html")
+            });
+          }
+        }
 
     private sealed class StubApiKeyProvider : IOpenAiApiKeyProvider
     {

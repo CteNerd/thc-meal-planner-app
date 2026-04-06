@@ -277,6 +277,58 @@ public sealed class MealPlanServiceTests
     }
 
     [Fact]
+    public async Task SuggestSwapOptionsAsync_WhenPlanMissing_ReturnsEmptyList()
+    {
+        var service = CreateService();
+
+        var result = await service.SuggestSwapOptionsAsync(FamilyId, "2026-03-30", "Monday", "dinner");
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SuggestSwapOptionsAsync_WhenAiHasFreshIdeas_AppendsAiSuggestions()
+    {
+        var planRepo = new InMemoryMealPlanRepository();
+        await planRepo.PutAsync(
+            ToPlanKey(FamilyId, "2026-03-30"),
+            new MealPlanDocument
+            {
+                FamilyId = FamilyId,
+                WeekStartDate = "2026-03-30",
+                Status = "active",
+                Meals =
+                [
+                    new MealSlotDocument { Day = "Monday", MealType = "dinner", RecipeId = "rec_current", RecipeName = "Current Dinner" }
+                ],
+                GeneratedBy = "ai",
+                ConstraintsUsed = "v1",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+
+        var recipeRepo = new InMemoryMealPlanServiceRecipeRepository();
+        await recipeRepo.PutAsync(
+            new DynamoDbKey($"FAMILY#{FamilyId}", "RECIPE#rec_other"),
+            BuildRecipe("rec_other", FamilyId, "Other Dinner", "dinner", prep: 15, cook: 20));
+
+        var aiService = new StubMealPlanAiService
+        {
+            FreshIdeas =
+            [
+                new AiRecipeIdea("Chickpea Curry", "Fast pantry dinner", "dinner")
+            ]
+        };
+
+        var service = CreateService(planRepo, recipeRepo, mealPlanAiService: aiService);
+
+        var result = await service.SuggestSwapOptionsAsync(FamilyId, "2026-03-30", "Monday", "dinner", limit: 5);
+
+        result.Should().Contain(x => x.RecipeId == "rec_other");
+        result.Should().Contain(x => x.IsAiSuggestion && x.RecipeName == "Chickpea Curry");
+    }
+
+    [Fact]
     public async Task UpdateAsync_MergesNewSlotsIntoExistingPlan()
     {
         var planRepo = new InMemoryMealPlanRepository();
@@ -325,6 +377,49 @@ public sealed class MealPlanServiceTests
         var result = await service.UpdateAsync(FamilyId, "2026-03-30", new UpdateMealPlanRequest());
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenOnlyStatusProvided_UpdatesStatusAndPreservesMeals()
+    {
+        var planRepo = new InMemoryMealPlanRepository();
+        var existing = new MealPlanDocument
+        {
+            FamilyId = FamilyId,
+            WeekStartDate = "2026-03-30",
+            Status = "active",
+            Meals = [new MealSlotDocument { Day = "Monday", MealType = "dinner", RecipeId = "rec_1", RecipeName = "Dinner" }]
+            ,
+            GeneratedBy = "manual",
+            ConstraintsUsed = "v1",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        await planRepo.PutAsync(ToPlanKey(FamilyId, "2026-03-30"), existing);
+
+        var service = CreateService(planRepo);
+
+        var result = await service.UpdateAsync(FamilyId, "2026-03-30", new UpdateMealPlanRequest { Status = "archived" });
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be("archived");
+        result.Meals.Should().ContainSingle(m => m.RecipeId == "rec_1");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenNoMealsOrStatus_ReturnsExistingPlan()
+    {
+        var planRepo = new InMemoryMealPlanRepository();
+        var existing = BuildActivePlan(FamilyId, "2026-03-30");
+        await planRepo.PutAsync(ToPlanKey(FamilyId, "2026-03-30"), existing);
+
+        var service = CreateService(planRepo);
+
+        var result = await service.UpdateAsync(FamilyId, "2026-03-30", new UpdateMealPlanRequest());
+
+        result.Should().NotBeNull();
+        result!.WeekStartDate.Should().Be(existing.WeekStartDate);
+        result.Status.Should().Be(existing.Status);
     }
 
     [Fact]
@@ -546,5 +641,37 @@ public sealed class MealPlanServiceTests
             int count,
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<AiRecipeIdea>>([]);
+    }
+
+    private sealed class StubMealPlanAiService : IMealPlanAiService
+    {
+        public IReadOnlyList<string> GeneratedRecipeIds { get; set; } = [];
+
+        public IReadOnlyList<string> RankedIds { get; set; } = [];
+
+        public IReadOnlyList<AiRecipeIdea> FreshIdeas { get; set; } = [];
+
+        public Task<IReadOnlyList<string>> GenerateRecipeIdsAsync(
+            string weekStartDate,
+            IReadOnlyList<(string Day, string MealType)> slots,
+            IReadOnlyList<RecipeDocument> recipes,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(GeneratedRecipeIds);
+
+        public Task<IReadOnlyList<string>> RankSwapCandidatesAsync(
+            string day,
+            string mealType,
+            string? currentRecipeId,
+            IReadOnlyList<RecipeDocument> candidates,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(RankedIds);
+
+        public Task<IReadOnlyList<AiRecipeIdea>> SuggestFreshIdeasAsync(
+            string day,
+            string mealType,
+            string? profileContext,
+            int count,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(FreshIdeas);
     }
 }
