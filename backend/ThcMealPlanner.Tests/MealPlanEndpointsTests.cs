@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Http.Json;
 using ThcMealPlanner.Api.GroceryLists;
 using ThcMealPlanner.Api.MealPlans;
+using ThcMealPlanner.Api.Profiles;
 using ThcMealPlanner.Api.Recipes;
 using ThcMealPlanner.Core.Data;
 
@@ -254,6 +255,8 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
         var favoriteRepository = new InMemoryMealPlanFavoriteRepository();
         var groceryRepository = new InMemoryMealPlanGroceryRepository();
         var pantryRepository = new InMemoryMealPlanPantryRepository();
+        var profileRepository = new InMemoryMealPlanUserProfileRepository();
+        var dependentProfileService = new NoOpDependentProfileService();
 
         var constraintEngine = new ConstraintEngine(Options.Create(new ConstraintConfig
         {
@@ -276,6 +279,8 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
                 services.AddSingleton<IDynamoDbRepository<FavoriteRecipeDocument>>(favoriteRepository);
                 services.AddSingleton<IDynamoDbRepository<GroceryListDocument>>(groceryRepository);
                 services.AddSingleton<IDynamoDbRepository<PantryStaplesDocument>>(pantryRepository);
+                services.AddSingleton<IDynamoDbRepository<UserProfileDocument>>(profileRepository);
+                services.AddSingleton<IDependentProfileService>(dependentProfileService);
                 services.AddScoped<IRecipeService>(_ => new RecipeService(recipeRepository, favoriteRepository));
                 services.AddSingleton<IConstraintEngine>(constraintEngine);
                 services.AddSingleton<IMealPlanAiService, NoOpMealPlanAiService>();
@@ -554,6 +559,71 @@ public sealed class MealPlanEndpointsTests : IClassFixture<WebApplicationFactory
             int? limit = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<FavoriteRecipeDocument>>([]);
+    }
+
+    private sealed class InMemoryMealPlanUserProfileRepository : IDynamoDbRepository<UserProfileDocument>
+    {
+        private readonly Dictionary<string, UserProfileDocument> _store = new(StringComparer.Ordinal);
+
+        public Task<UserProfileDocument?> GetAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.TryGetValue(ToCompositeKey(key), out var value);
+            return Task.FromResult(value);
+        }
+
+        public Task PutAsync(DynamoDbKey key, UserProfileDocument document, CancellationToken cancellationToken = default)
+        {
+            _store[ToCompositeKey(key)] = document;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(DynamoDbKey key, CancellationToken cancellationToken = default)
+        {
+            _store.Remove(ToCompositeKey(key));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<UserProfileDocument>> QueryByPartitionKeyAsync(
+            string partitionKey,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+        {
+            var items = _store
+                .Where(entry => entry.Key.StartsWith(partitionKey + "|", StringComparison.Ordinal))
+                .Select(entry => entry.Value)
+                .ToList();
+
+            if (limit.HasValue)
+            {
+                items = items.Take(limit.Value).ToList();
+            }
+
+            return Task.FromResult<IReadOnlyList<UserProfileDocument>>(items);
+        }
+
+        public Task<IReadOnlyList<UserProfileDocument>> QueryByIndexPartitionKeyAsync(
+            string indexName,
+            string partitionKeyName,
+            string partitionKeyValue,
+            IReadOnlyDictionary<string, string>? equalsFilters = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<UserProfileDocument>>([]);
+    }
+
+    private sealed class NoOpDependentProfileService : IDependentProfileService
+    {
+        public Task<IReadOnlyList<DependentProfileDocument>> ListByFamilyAsync(string familyId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<DependentProfileDocument>>([]);
+
+        public Task<DependentProfileDocument> CreateAsync(string familyId, CreateDependentRequest request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<DependentProfileDocument?> UpdateAsync(string familyId, string userId, UpdateDependentRequest request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> DeleteAsync(string familyId, string userId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class NoOpMealPlanAiService : IMealPlanAiService
