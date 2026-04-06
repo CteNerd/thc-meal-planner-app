@@ -75,7 +75,7 @@ public sealed class ChatEndpointsTests : IClassFixture<WebApplicationFactory<Pro
 
         var payload = await historyResponse.Content.ReadFromJsonAsync<ChatHistoryResponse>();
         payload.Should().NotBeNull();
-        payload!.Messages.Should().HaveCountGreaterOrEqualTo(2);
+        payload!.Messages.Should().HaveCountGreaterThanOrEqualTo(2);
         payload.Messages.Should().Contain(m => m.Role == ChatConstants.UserRole);
         payload.Messages.Should().Contain(m => m.Role == ChatConstants.AssistantRole);
     }
