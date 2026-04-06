@@ -8,8 +8,8 @@
     "diff": "cdk diff --context env=dev"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10",
-    "aws-cdk": "^2.1117.0",
+    "@types/node": "^25.5.2",
+    "aws-cdk": "^2.178.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
