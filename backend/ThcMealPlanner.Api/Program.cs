@@ -14,6 +14,19 @@ var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.RestApi);
+
+// Override Cognito config with environment variables if provided
+var cognitoUserPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID");
+var cognitoClientId = Environment.GetEnvironmentVariable("COGNITO_CLIENT_ID");
+if (!string.IsNullOrEmpty(cognitoUserPoolId))
+{
+    builder.Configuration["Authentication:Cognito:UserPoolId"] = cognitoUserPoolId;
+}
+if (!string.IsNullOrEmpty(cognitoClientId))
+{
+    builder.Configuration["Authentication:Cognito:ClientId"] = cognitoClientId;
+}
+
 builder.Services.AddCognitoAuthentication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IDependentProfileService, DependentProfileService>();
