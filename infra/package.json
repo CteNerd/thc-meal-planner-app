@@ -8,13 +8,13 @@
     "diff": "cdk diff --context env=dev"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10",
+    "@types/node": "^25.5.2",
     "aws-cdk": "^2.178.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.178.2",
+    "aws-cdk-lib": "^2.248.0",
     "constructs": "^10.4.2"
   }
 }
