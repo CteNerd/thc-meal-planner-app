@@ -18,7 +18,7 @@
     "amazon-cognito-identity-js": "^6.3.16",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.3.0",
+    "react-router-dom": "^7.14.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
