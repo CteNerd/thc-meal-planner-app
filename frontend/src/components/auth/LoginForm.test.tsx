@@ -6,6 +6,8 @@ import { AuthChallengeError } from '../../services/auth';
 
 const mockNavigate = vi.fn();
 const mockLogin = vi.fn();
+const mockForgotPassword = vi.fn();
+const mockConfirmForgotPassword = vi.fn();
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -20,7 +22,9 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     authMode: 'placeholder',
     isLoading: false,
-    login: mockLogin
+    login: mockLogin,
+    forgotPassword: mockForgotPassword,
+    confirmForgotPassword: mockConfirmForgotPassword
   })
 }));
 
@@ -28,6 +32,8 @@ describe('LoginForm', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     mockLogin.mockReset();
+    mockForgotPassword.mockReset();
+    mockConfirmForgotPassword.mockReset();
   });
 
   function renderForm() {
@@ -85,5 +91,31 @@ describe('LoginForm', () => {
 
     expect(await screen.findByText('Set up your authenticator app first')).toBeTruthy();
     expect(screen.getByText('SECRET123')).toBeTruthy();
+  });
+
+  it('requests a forgot-password code and confirms new password', async () => {
+    mockForgotPassword.mockResolvedValue(undefined);
+    mockConfirmForgotPassword.mockResolvedValue(undefined);
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'adult1@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset code' }));
+
+    await waitFor(() => {
+      expect(mockForgotPassword).toHaveBeenCalledWith('adult1@example.com');
+    });
+
+    expect(await screen.findByText('Reset code sent. Check your email and enter the code below.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Reset code'), { target: { value: '123456' } });
+    fireEvent.change(screen.getByLabelText('New account password'), { target: { value: 'my-secure-password-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set new password' }));
+
+    await waitFor(() => {
+      expect(mockConfirmForgotPassword).toHaveBeenCalledWith('adult1@example.com', '123456', 'my-secure-password-123');
+    });
+
+    expect(await screen.findByText('Password updated. Sign in with your new password.')).toBeTruthy();
   });
 });

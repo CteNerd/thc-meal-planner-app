@@ -11,13 +11,18 @@ import { TotpInput } from './TotpInput';
 export function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { authMode, isLoading, login } = useAuth();
+  const { authMode, isLoading, login, forgotPassword, confirmForgotPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [requiresTotp, setRequiresTotp] = useState(false);
   const [requiresNewPassword, setRequiresNewPassword] = useState(false);
   const [requiresMfaSetup, setRequiresMfaSetup] = useState(false);
   const [mfaSetupSecret, setMfaSetupSecret] = useState<string | null>(null);
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
+  const [recoveryCodeRequested, setRecoveryCodeRequested] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [status, setStatus] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -42,6 +47,50 @@ export function LoginForm() {
           onSubmit={async (event) => {
             event.preventDefault();
             setError(null);
+            setStatus(null);
+
+            if (isRecoveringPassword) {
+              if (!email) {
+                setError('Enter your account email first.');
+                return;
+              }
+
+              if (!recoveryCodeRequested) {
+                try {
+                  await forgotPassword(email);
+                  setRecoveryCodeRequested(true);
+                  setStatus('Reset code sent. Check your email and enter the code below.');
+                } catch {
+                  setError('Unable to send reset code. Verify your email and try again.');
+                }
+
+                return;
+              }
+
+              if (!isTotpCode(recoveryCode)) {
+                setError('Enter the 6-digit reset code from your email.');
+                return;
+              }
+
+              if (recoveryNewPassword.length < 12) {
+                setError('Use a new password with at least 12 characters.');
+                return;
+              }
+
+              try {
+                await confirmForgotPassword(email, recoveryCode, recoveryNewPassword);
+                setIsRecoveringPassword(false);
+                setRecoveryCodeRequested(false);
+                setRecoveryCode('');
+                setRecoveryNewPassword('');
+                setPassword('');
+                setStatus('Password updated. Sign in with your new password.');
+              } catch {
+                setError('Unable to reset password. Verify code and password requirements, then try again.');
+              }
+
+              return;
+            }
 
             if (requiresTotp && !isTotpCode(totpCode)) {
               setError('Enter a valid 6-digit TOTP code.');
@@ -105,13 +154,13 @@ export function LoginForm() {
             <Input
               type="password"
               placeholder={requiresNewPassword ? 'Temporary password from email' : 'Enter password'}
-              required
+              required={!isRecoveringPassword}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
-          {requiresNewPassword ? (
+          {requiresNewPassword && !isRecoveringPassword ? (
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">New password</span>
               <Input
@@ -124,7 +173,34 @@ export function LoginForm() {
             </label>
           ) : null}
 
-          {requiresTotp ? <TotpInput value={totpCode} onChange={setTotpCode} /> : null}
+          {requiresTotp && !isRecoveringPassword ? <TotpInput value={totpCode} onChange={setTotpCode} /> : null}
+
+          {isRecoveringPassword && recoveryCodeRequested ? (
+            <>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-slate-700">Reset code</span>
+                <Input
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="123456"
+                  required
+                  value={recoveryCode}
+                  onChange={(event) => setRecoveryCode(event.target.value)}
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-slate-700">New account password</span>
+                <Input
+                  type="password"
+                  placeholder="Set a new password"
+                  required
+                  value={recoveryNewPassword}
+                  onChange={(event) => setRecoveryNewPassword(event.target.value)}
+                />
+              </label>
+            </>
+          ) : null}
 
           {requiresMfaSetup && mfaSetupSecret ? (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -141,14 +217,58 @@ export function LoginForm() {
               type="checkbox"
               checked={rememberDevice}
               onChange={(event) => setRememberDevice(event.target.checked)}
+              disabled={isRecoveringPassword}
             />
             Remember this device
           </label>
 
+          {!isRecoveringPassword ? (
+            <button
+              type="button"
+              className="text-sm font-medium text-slate-700 underline underline-offset-2"
+              onClick={() => {
+                setIsRecoveringPassword(true);
+                setRequiresTotp(false);
+                setRequiresNewPassword(false);
+                setRequiresMfaSetup(false);
+                setMfaSetupSecret(null);
+                setTotpCode('');
+                setNewPassword('');
+                setError(null);
+                setStatus(null);
+              }}
+            >
+              Forgot password?
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="text-sm font-medium text-slate-700 underline underline-offset-2"
+              onClick={() => {
+                setIsRecoveringPassword(false);
+                setRecoveryCodeRequested(false);
+                setRecoveryCode('');
+                setRecoveryNewPassword('');
+                setError(null);
+              }}
+            >
+              Back to sign in
+            </button>
+          )}
+
+          {status ? <p className="text-sm text-emerald-700">{status}</p> : null}
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
 
           <Button className="w-full" type="submit" disabled={isLoading}>
-            {requiresTotp ? 'Verify code' : requiresNewPassword ? 'Set password and continue' : 'Continue'}
+            {isRecoveringPassword
+              ? recoveryCodeRequested
+                ? 'Set new password'
+                : 'Send reset code'
+              : requiresTotp
+                ? 'Verify code'
+                : requiresNewPassword
+                  ? 'Set password and continue'
+                  : 'Continue'}
           </Button>
         </form>
       </div>

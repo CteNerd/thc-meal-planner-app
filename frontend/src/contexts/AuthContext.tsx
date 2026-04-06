@@ -23,6 +23,8 @@ type AuthState = {
     rememberDevice: boolean,
     newPassword?: string
   ) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 };
@@ -67,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     configureApiClient({
-      // Backend authorization expects claims present in the Cognito ID token.
-      getAccessToken: () => session?.idToken ?? session?.accessToken ?? null,
+      // Prefer access token for API authorization and fall back to ID token only when needed.
+      getAccessToken: () => session?.accessToken ?? session?.idToken ?? null,
       refreshSession: async () => {
         const refreshedSession = await authService.refreshSession();
         setSession(refreshedSession);
@@ -89,6 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login: async (email, password, totpCode, rememberDevice, newPassword) => {
       const nextSession = await authService.login({ email, password, totpCode, rememberDevice, newPassword });
       setSession(nextSession);
+    },
+    forgotPassword: async (email) => {
+      await authService.forgotPassword(email);
+    },
+    confirmForgotPassword: async (email, code, newPassword) => {
+      await authService.confirmForgotPassword(email, code, newPassword);
     },
     logout: async () => {
       await authService.logout();

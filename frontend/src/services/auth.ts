@@ -16,6 +16,16 @@ const loginRequestSchema = z.object({
   rememberDevice: z.boolean()
 });
 
+const forgotPasswordRequestSchema = z.object({
+  email: z.string().email()
+});
+
+const confirmForgotPasswordRequestSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/),
+  newPassword: z.string().min(12)
+});
+
 export type AuthUser = {
   sub: string;
   email: string;
@@ -33,6 +43,8 @@ export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 export type AuthService = {
   login: (request: LoginRequest) => Promise<AuthSession>;
+  forgotPassword: (email: string) => Promise<void>;
+  confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   refreshSession: () => Promise<AuthSession | null>;
   logout: () => Promise<void>;
   getMode: () => 'placeholder' | 'cognito';
@@ -324,6 +336,55 @@ class CognitoAuthService implements AuthService {
     });
   }
 
+  public async forgotPassword(email: string): Promise<void> {
+    forgotPasswordRequestSchema.parse({ email });
+
+    const storage = getPreferredStorage();
+    const userPool = new CognitoUserPool({ ...this.poolData, Storage: storage });
+    const cognitoUser = new CognitoUser({
+      Username: email,
+      Pool: userPool,
+      Storage: storage
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      cognitoUser.forgotPassword({
+        onSuccess: () => {
+          resolve();
+        },
+        onFailure: (error) => {
+          reject(error);
+        },
+        inputVerificationCode: () => {
+          resolve();
+        }
+      });
+    });
+  }
+
+  public async confirmForgotPassword(email: string, code: string, newPassword: string): Promise<void> {
+    confirmForgotPasswordRequestSchema.parse({ email, code, newPassword });
+
+    const storage = getPreferredStorage();
+    const userPool = new CognitoUserPool({ ...this.poolData, Storage: storage });
+    const cognitoUser = new CognitoUser({
+      Username: email,
+      Pool: userPool,
+      Storage: storage
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      cognitoUser.confirmPassword(code, newPassword, {
+        onSuccess: () => {
+          resolve();
+        },
+        onFailure: (error) => {
+          reject(error);
+        }
+      });
+    });
+  }
+
   public async refreshSession(): Promise<AuthSession | null> {
     const storage = getPreferredStorage();
     const userPool = new CognitoUserPool({ ...this.poolData, Storage: storage });
@@ -396,6 +457,14 @@ class PlaceholderAuthService implements AuthService {
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
 
     return session;
+  }
+
+  public async forgotPassword(email: string): Promise<void> {
+    forgotPasswordRequestSchema.parse({ email });
+  }
+
+  public async confirmForgotPassword(email: string, code: string, newPassword: string): Promise<void> {
+    confirmForgotPasswordRequestSchema.parse({ email, code, newPassword });
   }
 
   public async refreshSession(): Promise<AuthSession | null> {
