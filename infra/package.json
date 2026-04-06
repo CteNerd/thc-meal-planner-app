@@ -8,13 +8,15 @@
     "diff": "cdk diff --context env=dev"
   },
   "devDependencies": {
+    "@types/source-map-support": "^0.5.10",
     "@types/node": "^25.5.2",
     "aws-cdk": "^2.178.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.3"
+    "typescript": "^6.0.2"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.248.0",
-    "constructs": "^10.6.0"
+    "constructs": "^10.4.2",
+    "source-map-support": "^0.5.21"
   }
 }
