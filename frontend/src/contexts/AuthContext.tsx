@@ -69,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     configureApiClient({
-      // Prefer access token for API authorization and fall back to ID token only when needed.
-      getAccessToken: () => session?.accessToken ?? session?.idToken ?? null,
+      // Backend authorization expects claims present in the Cognito ID token.
+      getAccessToken: () => session?.idToken ?? session?.accessToken ?? null,
       refreshSession: async () => {
         const refreshedSession = await authService.refreshSession();
         setSession(refreshedSession);
